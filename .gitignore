@@ -63,3 +63,6 @@ frames_out/
 
 # Pillow compiled libs (if installed in venv)
 pillow.libs/
+# USB capture files - security sensitive
+assets/data/*.pcap
+assets/data/*.bin
