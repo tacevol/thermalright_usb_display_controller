@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 import time, usb.core, usb.util, sys
+from pathlib import Path
 
 VENDOR = 0x87ad
 PRODUCT = 0x70db
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 INTERVAL_S = 2.9       # try 1 Hz first; we can tweak
 
 def find_out_endpoint(dev):
@@ -20,7 +24,7 @@ def find_out_endpoint(dev):
     raise RuntimeError("No OUT endpoint found")
 
 def main():
-    data = open("../assets/data/patched_payload.bin","rb").read()
+    data = (PROJECT_ROOT / "assets" / "data" / "patched_payload.bin").read_bytes()
     if not data:
         print("patched_payload.bin empty"); sys.exit(1)
 

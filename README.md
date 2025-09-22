@@ -1,55 +1,82 @@
-# Thermalright Display Hack
+# Thermalright USB Display Controller
 
-Reverse engineering and utilities for Thermalright display devices.
+System monitor and utilities for Thermalright USB display devices.
 
 ## Overview
 
-This project contains tools for analyzing and controlling Thermalright display devices via USB communication. The main functionality includes:
+This project provides a complete system monitoring solution for Thermalright USB display devices. The main functionality includes:
 
-- **Frame Analysis**: Analyze captured USB frames to understand the communication protocol
-- **Image Streaming**: Stream images to the display in real-time
-- **Screen Mirroring**: Mirror a specific window or screen region to the display
-- **Payload Replay**: Replay captured payloads to the device
+- **System Monitoring**: Real-time CPU usage monitoring with BTOP-style themes
+- **Device Communication**: USB protocol handling for Thermalright displays
+- **Image Streaming**: Stream system monitor data to the display in real-time
+- **Theme Support**: 30 authentic BTOP color themes with runtime cycling
 
 ## Project Structure
 
 ```
-thermalright_display_hack/
-├── src/                    # Main Python scripts
-│   ├── replay_loop.py      # Replay captured payloads in a loop
-│   ├── tiny_monitor_stream.py  # Stream screen content to display
-│   ├── analyze_headers.py  # Analyze USB frame headers and protocol
-│   └── send_image_patched.py   # Send single image to display
+thermalright_usb_display_controller/
+├── src/                    # Organized Python scripts
+│   ├── monitor/           # System monitoring and display
+│   │   └── thermalright_system_monitor.py  # Main production script
+│   ├── device/            # Device communication and protocols
+│   │   ├── analyze_headers.py           # Protocol analysis
+│   │   ├── send_image_patched.py        # Send single image
+│   │   ├── replay_loop.py               # Replay captured payloads
+│   │   └── tiny_monitor_stream.py       # Stream screen content
+│   └── tools/             # Development and testing tools
+│       └── simple_stress.py             # CPU stress testing
 ├── assets/                 # Images, binaries, and data files
 │   ├── images/            # Test images
-│   ├── data/              # Binary payloads and captures
-│   └── old/               # Legacy experiments
+│   └── data/              # Binary payloads and captures
+├── run_monitor.py         # Convenience script to run monitor
+├── requirements.txt       # Python dependencies
+├── CHANGELOG.md          # Project changelog
 └── venv/                  # Python virtual environment
 ```
 
 ## Main Scripts
 
-### `src/replay_loop.py`
-Replays a captured payload (`patched_payload.bin`) to the device in a continuous loop. Useful for testing and demonstration.
+### `src/monitor/thermalright_system_monitor.py` (Main Production Script)
+The primary system monitor that:
+- Automatically detects and monitors all CPU cores using `psutil`
+- Collects real-time CPU usage data with rolling averages for smooth display
+- Uses BTOP-compatible temperature readings via `lm-sensors`
+- Renders BTOP-style timeseries heatmaps for all CPU cores
+- Supports 30 authentic BTOP color themes with runtime cycling
+- Includes NVIDIA GPU monitoring (usage, temperature, VRAM) via `pynvml`
+- Sends data directly to the Thermalright USB display
+- Features keyboard controls (press 't' to cycle themes, 'q' to quit)
+- Optimized for high refresh rates (up to 20 FPS)
 
-### `src/tiny_monitor_stream.py`
-Real-time screen mirroring tool that:
-- Captures a specific window (configurable by title)
-- Encodes frames as JPEG to match the original payload size
-- Streams to the Thermalright display at configurable FPS
+### `run_monitor.py` (Convenience Script)
+Easy-to-use wrapper that can be run from anywhere:
+```bash
+python run_monitor.py --refresh-rate 15 --theme 0
+```
 
-### `src/analyze_headers.py`
-Protocol analysis tool that:
-- Analyzes multiple captured frames
-- Identifies length fields, frame counters, and checksums
-- Helps understand the USB communication protocol
+### Device Communication Scripts
 
-### `src/send_image_patched.py`
+#### `src/device/send_image_patched.py`
 Sends a single image to the display:
 - Takes an image file as input
 - Encodes as JPEG with size matching the original payload
 - Patches the header with correct length information
 - Sends to device once
+
+#### `src/device/replay_loop.py`
+Replays a captured payload (`patched_payload.bin`) to the device in a continuous loop. Useful for testing and demonstration.
+
+#### `src/device/tiny_monitor_stream.py`
+Real-time screen mirroring tool that:
+- Captures a specific window (configurable by title)
+- Encodes frames as JPEG to match the original payload size
+- Streams to the Thermalright display at configurable FPS
+
+#### `src/device/analyze_headers.py`
+Protocol analysis tool that:
+- Analyzes multiple captured frames
+- Identifies length fields, frame counters, and checksums
+- Helps understand the USB communication protocol
 
 ## Device Information
 
@@ -59,11 +86,13 @@ Sends a single image to the display:
 
 ## Requirements
 
-- Python 3.6+
-- pyusb
-- Pillow (PIL)
-- mss (for screen capture)
-- xdotool (for window detection on Linux)
+- Python 3.8+
+- pyusb (USB device communication)
+- Pillow (PIL) (image processing)
+- psutil (system monitoring)
+- mss (screen capture)
+- pynvml (NVIDIA GPU monitoring)
+- lm-sensors (CPU temperature readings)
 
 ## Setup
 
@@ -75,10 +104,16 @@ Sends a single image to the display:
 
 2. Install dependencies:
    ```bash
-   pip install pyusb pillow mss
+   pip install -r requirements.txt
    ```
 
-3. Set up USB permissions (Linux):
+3. Install system dependencies (Ubuntu/Debian):
+   ```bash
+   sudo apt install lm-sensors
+   sudo sensors-detect --auto
+   ```
+
+4. Set up USB permissions (Linux):
    ```bash
    sudo usermod -a -G plugdev $USER
    # Add udev rule for the device
@@ -86,25 +121,67 @@ Sends a single image to the display:
 
 ## Usage
 
-### Stream screen content:
+### Run the main system monitor:
 ```bash
-python src/tiny_monitor_stream.py
+# Using the convenience script (recommended) - 15 FPS default
+python run_monitor.py
+
+# For high performance (20 FPS)
+python run_monitor.py --refresh-rate 20
+
+# For slower updates (10 FPS)
+python run_monitor.py --refresh-rate 10
+
+# Or directly
+python src/monitor/thermalright_system_monitor.py --refresh-rate 15 --theme 0
 ```
 
-### Send a single image:
+### Available options:
+- `--refresh-rate`: Refresh rate in FPS (default: 15, max: 20)
+- `--theme`: Initial theme index 0-29 (default: 0)
+- `--quality`: JPEG quality 1-100 (default: 80)
+
+### Runtime controls:
+- Press `t` to cycle through themes
+- Press `q` to quit
+
+### Other utilities:
+
+#### Stream screen content:
 ```bash
-python src/send_image_patched.py assets/images/moose.png
+python src/device/tiny_monitor_stream.py
 ```
 
-### Analyze captured frames:
+#### Send a single image:
 ```bash
-python src/analyze_headers.py assets/data/frame.bin
+python src/device/send_image_patched.py assets/images/moose.png
 ```
 
-### Replay captured payload:
+#### Analyze captured frames:
 ```bash
-python src/replay_loop.py
+python src/device/analyze_headers.py assets/data/frame.bin
 ```
+
+#### Replay captured payload:
+```bash
+python src/device/replay_loop.py
+```
+
+#### CPU stress testing:
+```bash
+python src/tools/simple_stress.py
+```
+
+## Features
+
+- **Automatic CPU Detection**: Automatically detects and monitors all CPU cores on any system
+- **Real-time CPU Monitoring**: Shows all CPU cores with usage percentages and temperatures
+- **Smooth Display Values**: Rolling averages eliminate noisy readings while preserving real-time heatmaps
+- **BTOP-style Themes**: 30 authentic color themes matching BTOP's visual style
+- **Timeseries Heatmaps**: Rolling window visualization for each CPU core
+- **Runtime Theme Cycling**: Press 't' to cycle through themes while running
+- **Robust Path Handling**: All scripts use proper path resolution and work from any directory
+- **USB Device Communication**: Direct communication with Thermalright USB displays
 
 ## Notes
 
@@ -112,6 +189,7 @@ python src/replay_loop.py
 - Frame rate should be kept reasonable to avoid overwhelming the USB connection
 - JPEG encoding is optimized to match the exact size of captured frames
 - Some scripts require the device to be connected and accessible via USB
+- All paths are resolved relative to the project root, making scripts portable
 
 ## License
 

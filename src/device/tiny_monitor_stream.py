@@ -11,7 +11,10 @@ WINDOW_TITLE   = "btop"     # substring to find the window to mirror
 FPS            = 20          # try 5 or 10, keep comfortably under USB and CPU limits
 TARGET_W       = 480
 TARGET_H       = 480
-FRAME_BIN      = "../assets/data/frame.bin"  # the capture you used earlier
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+FRAME_BIN = PROJECT_ROOT / "assets" / "data" / "frame.bin"  # the capture you used earlier
 # ===========================
 
 

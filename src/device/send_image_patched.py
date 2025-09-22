@@ -8,7 +8,9 @@ VENDOR = 0x87ad
 PRODUCT = 0x70db
 CHUNK  = 4096
 
-FRAME_BIN = "../assets/data/frame.bin"     # reference capture you used before (to steal header & tail)
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+FRAME_BIN = PROJECT_ROOT / "assets" / "data" / "frame.bin"     # reference capture you used before (to steal header & tail)
 HEADER_LEN = 64             # analyzer showed common header length = 64
 LEN_FIELD_OFF = 60          # u32 little-endian = JPEG length (bytes)
 TARGET_W, TARGET_H = 480, 480
@@ -68,7 +70,7 @@ def send(ep_out, payload: bytes):
         off += n
 
 def main():
-    img_path = "../assets/images/moose02.png" if len(sys.argv) < 2 else sys.argv[1]
+    img_path = PROJECT_ROOT / "assets" / "images" / "moose02.png" if len(sys.argv) < 2 else sys.argv[1]
     quality  = 100
     if len(sys.argv) >= 3:
         try: quality = int(sys.argv[2])
@@ -88,7 +90,7 @@ def main():
     struct.pack_into("<I", header, LEN_FIELD_OFF, jpg_len)
 
     payload = bytes(header) + jpg + tail
-    Path("../assets/data/patched_payload.bin").write_bytes(payload)   # handy for reuse/looping
+    (PROJECT_ROOT / "assets" / "data" / "patched_payload.bin").write_bytes(payload)   # handy for reuse/looping
 
     print(f"JPEG {img_path}: {jpg_len} bytes (q={quality})")
     print(f"Header[60:64] -> {jpg_len} (u32le)")
