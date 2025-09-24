@@ -99,12 +99,25 @@ except Exception as e:
 class Theme:
     """BTOP-style color theme for CPU usage visualization."""
     
-    def __init__(self, name: str, start_color: Tuple[int, int, int], 
-                 mid_color: Tuple[int, int, int], end_color: Tuple[int, int, int]):
+    def __init__(self, name: str, cpu_start: Tuple[int, int, int], 
+                 cpu_mid: Tuple[int, int, int], cpu_end: Tuple[int, int, int],
+                 temp_start: Tuple[int, int, int] = None, 
+                 temp_mid: Tuple[int, int, int] = None, 
+                 temp_end: Tuple[int, int, int] = None):
         self.name = name
-        self.start_color = start_color
-        self.mid_color = mid_color
-        self.end_color = end_color
+        self.cpu_start = cpu_start
+        self.cpu_mid = cpu_mid
+        self.cpu_end = cpu_end
+        
+        # Temperature colors - use CPU colors as fallback if not specified
+        self.temp_start = temp_start if temp_start else cpu_start
+        self.temp_mid = temp_mid if temp_mid else cpu_mid
+        self.temp_end = temp_end if temp_end else cpu_end
+        
+        # Legacy support for old code
+        self.start_color = cpu_start
+        self.mid_color = cpu_mid
+        self.end_color = cpu_end
     
     def get_color_for_usage(self, usage_pct: float) -> Tuple[int, int, int]:
         """Map CPU usage percentage to color using this theme's gradient."""
@@ -122,45 +135,129 @@ class Theme:
         else:
             # Interpolate between mid and end colors
             t = (usage - 50) / 50.0
-            r = int(self.mid_color[0] + (self.end_color[0] - self.mid_color[0]) * t)
-            g = int(self.mid_color[1] + (self.end_color[1] - self.mid_color[1]) * t)
-            b = int(self.mid_color[2] + (self.end_color[2] - self.mid_color[2]) * t)
+            r = int(self.cpu_mid[0] + (self.cpu_end[0] - self.cpu_mid[0]) * t)
+            g = int(self.cpu_mid[1] + (self.cpu_end[1] - self.cpu_mid[1]) * t)
+            b = int(self.cpu_mid[2] + (self.cpu_end[2] - self.cpu_mid[2]) * t)
+        
+        return (r, g, b)
+    
+    def get_color_for_temperature(self, temp_c: float) -> Tuple[int, int, int]:
+        """Map temperature in Celsius to color using this theme's temperature gradient."""
+        if temp_c is None or temp_c < 0:
+            return (80, 80, 80)
+        
+        # Temperature range: 30°C to 85°C (typical CPU range)
+        # Map to 0-100% for color interpolation
+        temp_normalized = max(0, min(100, ((temp_c - 30) / 55) * 100))
+        
+        if temp_normalized < 50:
+            # Interpolate between temperature start and mid colors
+            t = temp_normalized / 50.0
+            r = int(self.temp_start[0] + (self.temp_mid[0] - self.temp_start[0]) * t)
+            g = int(self.temp_start[1] + (self.temp_mid[1] - self.temp_start[1]) * t)
+            b = int(self.temp_start[2] + (self.temp_mid[2] - self.temp_start[2]) * t)
+        else:
+            # Interpolate between temperature mid and end colors
+            t = (temp_normalized - 50) / 50.0
+            r = int(self.temp_mid[0] + (self.temp_end[0] - self.temp_mid[0]) * t)
+            g = int(self.temp_mid[1] + (self.temp_end[1] - self.temp_mid[1]) * t)
+            b = int(self.temp_mid[2] + (self.temp_end[2] - self.temp_mid[2]) * t)
         
         return (r, g, b)
 
 # BTOP-style themes
 THEMES = [
     # Official BTOP Themes (extracted from https://github.com/aristocratos/btop/tree/main/themes)
-    Theme("Default", (0, 255, 0), (255, 255, 0), (255, 0, 0)),  # BTOP built-in default theme
-    Theme("Hotpurpletrafficlight", (0, 255, 0), (255, 153, 51), (255, 0, 0)),
-    Theme("Adapta", (0, 188, 212), (212, 212, 0), (255, 0, 64)),
-    Theme("Adwaita Dark", (98, 160, 234), (28, 113, 216), (224, 27, 36)),
-    Theme("Adwaita", (26, 95, 180), (26, 95, 180), (192, 28, 40)),
-    Theme("Ayu", (223, 191, 255), (210, 166, 255), (163, 122, 204)),
-    Theme("Dracula", (189, 147, 249), (255, 121, 198), (255, 51, 168)),
-    Theme("Dusklight", (0, 173, 255), (0, 255, 255), (255, 248, 107)),
-    Theme("Elementarish", (133, 153, 0), (178, 134, 2), (209, 48, 44)),
-    Theme("Everforest Dark Hard", (167, 192, 128), (219, 188, 127), (248, 85, 82)),
-    Theme("Everforest Light Medium", (141, 161, 1), (223, 160, 0), (248, 85, 82)),
-    Theme("Flat Remix", (54, 123, 240), (184, 23, 76), (212, 25, 25)),
-    Theme("Greyscale", (80, 80, 80), (255, 255, 255), (255, 255, 255)),
-    Theme("Gruvbox Dark", (69, 133, 136), (211, 134, 155), (251, 67, 148)),
-    Theme("Gruvbox Dark V2", (152, 151, 26), (255, 255, 255), (204, 36, 29)),
-    Theme("Gruvbox Material Dark", (125, 174, 163), (231, 138, 78), (234, 105, 98)),
-    Theme("Horizon", (39, 215, 150), (250, 194, 154), (233, 86, 120)),
-    Theme("Kanagawa Lotus", (110, 145, 95), (204, 109, 0), (215, 71, 75)),
-    Theme("Kanagawa Wave", (152, 187, 108), (220, 165, 97), (232, 36, 36)),
-    Theme("Kyli0X", (33, 214, 201), (26, 171, 160), (94, 196, 188)),
-    Theme("Matcha Dark Sea", (121, 118, 183), (216, 184, 178), (51, 177, 101)),
-    Theme("Monokai", (121, 118, 183), (216, 184, 178), (249, 38, 114)),
-    Theme("Night Owl", (130, 170, 255), (199, 146, 234), (251, 67, 148)),
-    Theme("Nord", (129, 161, 193), (136, 192, 208), (236, 239, 244)),
-    Theme("Onedark", (152, 195, 121), (229, 192, 123), (224, 108, 117)),
-    Theme("Paper", (85, 85, 85), (0, 0, 0), (204, 62, 40)),
-    Theme("Solarized Dark", (38, 139, 210), (204, 181, 247), (252, 83, 120)),
-    Theme("Tokyo Night", (158, 206, 106), (224, 175, 104), (247, 118, 142)),
-    Theme("Tomorrow Night", (181, 189, 104), (240, 198, 116), (204, 102, 102)),
-    Theme("Whiteout", (24, 69, 103), (18, 44, 135), (158, 0, 97)),
+    Theme("Default", 
+          cpu_start=(0, 255, 0), cpu_mid=(255, 255, 0), cpu_end=(255, 0, 0),
+          temp_start=(0, 200, 255), temp_mid=(255, 200, 0), temp_end=(255, 100, 100)),  # BTOP built-in default theme
+    Theme("HotPurpleTrafficLight",
+          cpu_start=(0, 255, 0), cpu_mid=(204, 255, 102), cpu_end=(255, 0, 0),
+          temp_start=(0, 255, 0), temp_mid=(255, 153, 51), temp_end=(255, 0, 0)),
+    Theme("Adapta",
+          cpu_start=(0, 188, 212), cpu_mid=(212, 212, 0), cpu_end=(255, 0, 64),
+          temp_start=(0, 188, 212), temp_mid=(212, 212, 0), temp_end=(255, 0, 64)),
+    Theme("Adwaita Dark",
+          cpu_start=(98, 160, 234), cpu_mid=(28, 113, 216), cpu_end=(224, 27, 36),
+          temp_start=(98, 160, 234), temp_mid=(28, 113, 216), temp_end=(224, 27, 36)),
+    Theme("Adwaita",
+          cpu_start=(26, 95, 180), cpu_mid=(26, 95, 180), cpu_end=(192, 28, 40),
+          temp_start=(26, 95, 180), temp_mid=(26, 95, 180), temp_end=(192, 28, 40)),
+    Theme("Ayu",
+          cpu_start=(223, 191, 255), cpu_mid=(210, 166, 255), cpu_end=(163, 122, 204),
+          temp_start=(223, 191, 255), temp_mid=(210, 166, 255), temp_end=(163, 122, 204)),
+    Theme("Dracula",
+          cpu_start=(189, 147, 249), cpu_mid=(139, 233, 253), cpu_end=(80, 250, 123),
+          temp_start=(189, 147, 249), temp_mid=(255, 121, 198), temp_end=(255, 51, 168)),
+    Theme("Dusklight",
+          cpu_start=(0, 212, 255), cpu_mid=(255, 248, 107), cpu_end=(255, 127, 0),
+          temp_start=(0, 173, 255), temp_mid=(0, 255, 255), temp_end=(255, 248, 107)),
+    Theme("Elementarish",
+          cpu_start=(133, 153, 0), cpu_mid=(178, 134, 2), cpu_end=(209, 48, 44),
+          temp_start=(133, 153, 0), temp_mid=(178, 134, 2), temp_end=(209, 48, 44)),
+    Theme("Everforest Dark Hard",
+          cpu_start=(167, 192, 128), cpu_mid=(219, 188, 127), cpu_end=(248, 85, 82),
+          temp_start=(167, 192, 128), temp_mid=(219, 188, 127), temp_end=(248, 85, 82)),
+    Theme("Flat Remix Light",
+          cpu_start=(54, 123, 240), cpu_mid=(74, 174, 230), cpu_end=(84, 189, 142),
+          temp_start=(54, 123, 240), temp_mid=(184, 23, 76), temp_end=(212, 25, 25)),
+    Theme("Flat Remix",
+          cpu_start=(54, 123, 240), cpu_mid=(74, 174, 230), cpu_end=(84, 189, 142),
+          temp_start=(54, 123, 240), temp_mid=(184, 23, 76), temp_end=(212, 25, 25)),
+    Theme("Greyscale",
+          cpu_start=(80, 80, 80), cpu_mid=(128, 128, 128), cpu_end=(255, 255, 255),
+          temp_start=(80, 80, 80), temp_mid=(128, 128, 128), temp_end=(255, 255, 255)),
+    Theme("Gruvbox Dark",
+          cpu_start=(184, 187, 38), cpu_mid=(215, 153, 33), cpu_end=(251, 73, 52),
+          temp_start=(69, 133, 136), temp_mid=(211, 134, 155), temp_end=(251, 67, 148)),
+    Theme("Gruvbox Dark V2",
+          cpu_start=(142, 192, 124), cpu_mid=(215, 153, 33), cpu_end=(204, 36, 29),
+          temp_start=(142, 192, 124), temp_mid=(215, 153, 33), temp_end=(204, 36, 29)),
+    Theme("Gruvbox Material Dark",
+          cpu_start=(169, 182, 101), cpu_mid=(216, 166, 87), cpu_end=(234, 105, 98),
+          temp_start=(125, 174, 163), temp_mid=(231, 138, 78), temp_end=(234, 105, 98)),
+    Theme("Horizon",
+          cpu_start=(39, 215, 150), cpu_mid=(250, 194, 154), cpu_end=(233, 86, 120),
+          temp_start=(39, 215, 150), temp_mid=(250, 194, 154), temp_end=(233, 86, 120)),
+    Theme("Kyli0X",
+          cpu_start=(33, 214, 201), cpu_mid=(26, 171, 160), cpu_end=(94, 196, 188),
+          temp_start=(33, 214, 201), temp_mid=(26, 171, 160), temp_end=(94, 196, 188)),
+    Theme("Matcha Dark Sea",
+          cpu_start=(51, 177, 101), cpu_mid=(248, 248, 242), cpu_end=(46, 179, 152),
+          temp_start=(121, 118, 183), temp_mid=(216, 184, 178), temp_end=(51, 177, 101)),
+    Theme("Monokai",
+          cpu_start=(166, 226, 46), cpu_mid=(248, 248, 242), cpu_end=(249, 38, 114),
+          temp_start=(121, 118, 183), temp_mid=(216, 184, 178), temp_end=(249, 38, 114)),
+    Theme("Night Owl",
+          cpu_start=(34, 218, 110), cpu_mid=(173, 219, 103), cpu_end=(239, 83, 80),
+          temp_start=(130, 170, 255), temp_mid=(199, 146, 234), temp_end=(251, 67, 148)),
+    Theme("Nord",
+          cpu_start=(129, 161, 193), cpu_mid=(136, 192, 208), cpu_end=(236, 239, 244),
+          temp_start=(129, 161, 193), temp_mid=(136, 192, 208), temp_end=(236, 239, 244)),
+    Theme("Onedark",
+          cpu_start=(152, 195, 121), cpu_mid=(229, 192, 123), cpu_end=(224, 108, 117),
+          temp_start=(152, 195, 121), temp_mid=(229, 192, 123), temp_end=(224, 108, 117)),
+    Theme("Paper",
+          cpu_start=(85, 85, 85), cpu_mid=(0, 0, 0), cpu_end=(204, 62, 40),
+          temp_start=(85, 85, 85), temp_mid=(0, 0, 0), temp_end=(204, 62, 40)),
+    Theme("Solarized Dark",
+          cpu_start=(173, 199, 0), cpu_mid=(214, 162, 0), cpu_end=(230, 83, 23),
+          temp_start=(38, 139, 210), temp_mid=(204, 181, 247), temp_end=(252, 83, 120)),
+    Theme("Solarized Light",
+          cpu_start=(173, 199, 0), cpu_mid=(214, 162, 0), cpu_end=(230, 83, 23),
+          temp_start=(38, 139, 210), temp_mid=(204, 181, 247), temp_end=(252, 83, 120)),
+    Theme("Tokyo Night",
+          cpu_start=(158, 206, 106), cpu_mid=(224, 175, 104), cpu_end=(247, 118, 142),
+          temp_start=(158, 206, 106), temp_mid=(224, 175, 104), temp_end=(247, 118, 142)),
+    Theme("Tokyo Storm",
+          cpu_start=(158, 206, 106), cpu_mid=(224, 175, 104), cpu_end=(247, 118, 142),
+          temp_start=(158, 206, 106), temp_mid=(224, 175, 104), temp_end=(247, 118, 142)),
+    Theme("Tomorrow Night",
+          cpu_start=(181, 189, 104), cpu_mid=(240, 198, 116), cpu_end=(204, 102, 102),
+          temp_start=(181, 189, 104), temp_mid=(240, 198, 116), temp_end=(204, 102, 102)),
+    Theme("Whiteout",
+          cpu_start=(11, 142, 68), cpu_mid=(164, 145, 4), cpu_end=(141, 2, 2),
+          temp_start=(24, 69, 103), temp_mid=(18, 44, 135), temp_end=(158, 0, 97)),
 ]
 
 # Global theme state (set by set_theme() in main())
@@ -568,6 +665,18 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
         
         # Temperature value (smoothed)
         temp = get_smoothed_temp(i)
+        
+        # Draw temperature bar with color based on temperature
+        if temp > 30:  # Only show colored bar if temperature is above 30°C
+            temp_color = current_theme.get_color_for_temperature(temp)
+            # Fill temperature bar with color proportional to temperature
+            temp_fill_width = int((temp - 30) / 55 * temp_bar_width)  # 30-85°C range
+            temp_fill_width = max(0, min(temp_bar_width, temp_fill_width))
+            
+            if temp_fill_width > 0:
+                draw.rectangle([temp_bar_x, temp_bar_y, temp_bar_x + temp_fill_width, 
+                               temp_bar_y + temp_bar_height], fill=temp_color)
+        
         temp_text = f"{int(temp)}°C"
         temp_text_x = temp_bar_x + temp_bar_width + 5
         draw.text((temp_text_x, temp_bar_y), temp_text, font=f_small, fill=WHITE)
