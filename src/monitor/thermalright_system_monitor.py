@@ -52,7 +52,7 @@ MARGIN = 0
 
 # Background image settings
 BACKGROUND_IMAGE_PATH = None  # Will be set to assets/images/ if available
-BLUR_LEVELS = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]  # 10 blur levels
+BLUR_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 blur levels
 GRADIENT_LEVELS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]  # 10 opacity levels
 current_blur_level = 0  # Index into BLUR_LEVELS
 current_gradient_level = 0  # Index into GRADIENT_LEVELS
