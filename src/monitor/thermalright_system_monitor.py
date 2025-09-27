@@ -29,7 +29,7 @@ import threading
 import select
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 import usb.core
 import usb.util
 import psutil
@@ -48,7 +48,16 @@ except ImportError:
 # Display settings
 DISPLAY_WIDTH = 480
 DISPLAY_HEIGHT = 480
-MARGIN = 24
+MARGIN = 0
+
+# Background image settings
+BACKGROUND_IMAGE_PATH = None  # Will be set to assets/images/ if available
+BLUR_LEVELS = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]  # 10 blur levels
+GRADIENT_LEVELS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]  # 10 opacity levels
+current_blur_level = 0  # Index into BLUR_LEVELS
+current_gradient_level = 0  # Index into GRADIENT_LEVELS
+background_image = None
+stats_enabled = True  # Toggle for showing/hiding all stats
 
 # Colors (RGB format for JPEG compatibility)
 WHITE = (240, 240, 240)
@@ -311,14 +320,20 @@ def set_theme(index: int):
 # ============================================================================
 
 def keyboard_listener():
-    """Listen for keyboard input to cycle themes and quit."""
-    print("Press 't' to cycle themes, 'q' to quit")
+    """Listen for keyboard input to cycle themes, blur, gradient, toggle stats, and quit."""
+    print("Press 't' to cycle themes, 'b' to cycle blur, 'g' to cycle gradient, 's' to toggle stats, 'q' to quit")
     while True:
         try:
             if select.select([sys.stdin], [], [], 0.1)[0]:
                 key = sys.stdin.read(1).lower()
                 if key == 't':
                     cycle_theme()
+                elif key == 'b':
+                    cycle_blur_level()
+                elif key == 'g':
+                    cycle_gradient_level()
+                elif key == 's':
+                    toggle_stats()
                 elif key == 'q':
                     print("Quitting...")
                     os._exit(0)
@@ -578,9 +593,18 @@ def get_gpu_info() -> Dict:
 def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int = DISPLAY_WIDTH, 
                             height: int = DISPLAY_HEIGHT) -> Image.Image:
     """Create the system monitoring overlay image."""
-    # Create image with RGB background (JPEG compatible)
-    overlay = Image.new('RGB', (width, height), BACKGROUND)
+    # Start with background image if available, otherwise use solid background
+    processed_bg = get_processed_background()
+    if processed_bg is not None:
+        overlay = processed_bg.copy()
+    else:
+        overlay = Image.new('RGB', (width, height), BACKGROUND)
+    
     draw = ImageDraw.Draw(overlay)
+    
+    # If stats are disabled, return just the background image
+    if not stats_enabled:
+        return overlay
     
     # Load fonts
     f_big = load_font(40)
@@ -589,10 +613,10 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
     f_tiny = load_font(14)
     
     # Layout parameters - optimized to fit all 20 cores
-    bar_width = 180  # Reduced from 200
+    bar_width = 130  # Reduced from 200
     bar_height = 18  # Reduced from 22
     bar_spacing = 2  # Reduced from 3
-    temp_bar_width = 35  # Reduced from 40
+    temp_bar_width = 25  # Reduced from 40
     temp_bar_height = 10  # Reduced from 12
     label_width = 30  # Reduced from 35
     
@@ -723,6 +747,111 @@ def make_jpeg(image: Image.Image, quality: int = 80) -> bytes:
     image.save(buffer, format='JPEG', quality=quality, optimize=True)
     return buffer.getvalue()
 
+def load_background_image():
+    """Load background image from assets/images/ directory."""
+    global background_image, BACKGROUND_IMAGE_PATH
+    
+    # Try to find a background image in assets/images/
+    assets_dir = Path(__file__).parent.parent.parent / "assets" / "images"
+    if assets_dir.exists():
+        # Look for common image formats
+        for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
+            images = list(assets_dir.glob(ext))
+            if images:
+                BACKGROUND_IMAGE_PATH = str(images[0])
+                try:
+                    background_image = Image.open(BACKGROUND_IMAGE_PATH).convert("RGB")
+                    # Resize to display dimensions
+                    background_image = background_image.resize((DISPLAY_WIDTH, DISPLAY_HEIGHT), Image.LANCZOS)
+                    print(f"Loaded background image: {BACKGROUND_IMAGE_PATH}")
+                    return True
+                except Exception as e:
+                    print(f"Failed to load background image {BACKGROUND_IMAGE_PATH}: {e}")
+                    background_image = None
+                    BACKGROUND_IMAGE_PATH = None
+                    return False
+    
+    print("No background image found in assets/images/")
+    return False
+
+def get_processed_background():
+    """Get the background image with current blur and gradient effects applied."""
+    global background_image, current_blur_level, current_gradient_level
+    
+    if background_image is None:
+        return None
+    
+    # Create a copy to avoid modifying the original
+    processed = background_image.copy()
+    
+    # Apply blur effect
+    blur_radius = BLUR_LEVELS[current_blur_level]
+    if blur_radius > 0:
+        processed = processed.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    
+    # Apply gradient/opacity effect
+    opacity = GRADIENT_LEVELS[current_gradient_level]
+    if opacity < 1.0:
+        # Create a black overlay and blend
+        overlay = Image.new("RGB", (DISPLAY_WIDTH, DISPLAY_HEIGHT), (0, 0, 0))
+        processed = Image.blend(processed, overlay, 1.0 - opacity)
+    
+    return processed
+
+def cycle_blur_level():
+    """Cycle through blur levels."""
+    global current_blur_level
+    current_blur_level = (current_blur_level + 1) % len(BLUR_LEVELS)
+    blur_radius = BLUR_LEVELS[current_blur_level]
+    print(f"Blur level: {current_blur_level + 1}/10 (radius: {blur_radius})")
+
+def cycle_gradient_level():
+    """Cycle through gradient/opacity levels."""
+    global current_gradient_level
+    current_gradient_level = (current_gradient_level + 1) % len(GRADIENT_LEVELS)
+    opacity = GRADIENT_LEVELS[current_gradient_level]
+    print(f"Gradient level: {current_gradient_level + 1}/10 (opacity: {opacity:.1f})")
+
+def toggle_stats():
+    """Toggle stats display on/off."""
+    global stats_enabled
+    stats_enabled = not stats_enabled
+    status = "ON" if stats_enabled else "OFF"
+    print(f"Stats display: {status}")
+
+def show_preview(image: Image.Image):
+    """Show the image in a preview window."""
+    try:
+        import tkinter as tk
+        from PIL import ImageTk
+        
+        # Create or update preview window
+        if not hasattr(show_preview, 'window') or not show_preview.window.winfo_exists():
+            show_preview.window = tk.Tk()
+            show_preview.window.title("Thermalright Monitor Preview")
+            show_preview.window.geometry("500x500")
+            show_preview.window.configure(bg='black')
+            
+            # Create label for image
+            show_preview.label = tk.Label(show_preview.window, bg='black')
+            show_preview.label.pack(expand=True, fill='both')
+        
+        # Convert PIL image to PhotoImage and display
+        photo = ImageTk.PhotoImage(image)
+        show_preview.label.configure(image=photo)
+        show_preview.label.image = photo  # Keep a reference
+        
+        # Update window
+        show_preview.window.update_idletasks()
+        show_preview.window.update()
+        
+    except ImportError:
+        # Fallback: save image to file
+        image.save("preview.png")
+        print("Preview saved as preview.png (tkinter not available)")
+    except Exception as e:
+        print(f"Preview error: {e}")
+
 def open_device():
     """Open and configure the USB device."""
     device = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
@@ -755,16 +884,21 @@ def send_payload(endpoint, payload: bytes):
 # Main Application
 # ============================================================================
 
-def main():
+def main(preview=False):
     """Main application entry point."""
     import argparse
     
     parser = argparse.ArgumentParser(description="System monitor for thermalright USB display")
     parser.add_argument("--refresh-rate", type=float, default=15.0, help="Refresh rate in FPS (default: 15)")
-    parser.add_argument("--theme", type=int, default=6, help="Theme index (0-29). Press 't' to cycle themes at runtime.")
+    parser.add_argument("--theme", type=int, default=2, help="Theme index (0-29). Press 't' to cycle themes at runtime.")
     parser.add_argument("--quality", type=int, default=80, help="JPEG quality (1-100)")
+    parser.add_argument("--preview", action='store_true', help="Show preview window instead of sending to device")
     
     args = parser.parse_args()
+    
+    # Use preview parameter if passed directly, otherwise use command line arg
+    if preview:
+        args.preview = True
     
     # Convert FPS to interval and ensure reasonable limits
     args.refresh_rate = max(1.0, min(20.0, args.refresh_rate))  # Limit to 1-20 FPS
@@ -783,6 +917,9 @@ def main():
     
     # Set initial theme
     set_theme(args.theme)
+    
+    # Load background image
+    load_background_image()
     
     # Start keyboard listener thread
     keyboard_thread = threading.Thread(target=keyboard_listener, daemon=True)
@@ -849,9 +986,14 @@ def main():
             # Create payload
             payload = bytes(header_copy) + jpeg_data + tail
             
-            # Send to device
+            # Send to device or show preview
             send_start = time.time()
-            send_payload(endpoint, payload)
+            if args.preview:
+                # Show preview window
+                show_preview(overlay)
+            else:
+                # Send to device
+                send_payload(endpoint, payload)
             send_time = time.time() - send_start
             
             total_loop_time = time.time() - loop_start
