@@ -34,12 +34,8 @@ import usb.core
 import usb.util
 import psutil
 
-# Optional NVIDIA NVML support
-try:
-    import pynvml
-    HAS_NVML = True
-except ImportError:
-    HAS_NVML = False
+# GPU monitoring uses nvidia-smi (same as BPYTOP)
+# No additional imports needed for nvidia-smi approach
 
 # ============================================================================
 # Configuration
@@ -553,49 +549,46 @@ def get_cpu_info(sampling_interval: float = 0.05) -> Dict:
     }
 
 def get_gpu_info() -> Dict:
-    """Get GPU information using NVIDIA NVML (similar to BPYTOP's approach)."""
+    """Get GPU information using nvidia-smi (same as BPYTOP's approach)."""
     gpu_info = {
         'available': False,
         'usage_percent': 0,
         'temperature': 0,
         'memory_used': 0,
         'memory_total': 0,
-        'memory_percent': 0
+        'memory_percent': 0,
+        'fan_speed': 0,
+        'power_usage': 0
     }
     
-    if not HAS_NVML:
-        return gpu_info
-    
     try:
-        # Initialize NVML
-        pynvml.nvmlInit()
+        # Use nvidia-smi to get GPU information (same as BPYTOP)
+        # Query multiple GPU metrics in one call for efficiency
+        result = subprocess.run([
+            'nvidia-smi', 
+            '--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,fan.speed,power.draw',
+            '--format=csv,noheader,nounits'
+        ], capture_output=True, text=True, timeout=2)
         
-        # Get GPU count
-        device_count = pynvml.nvmlDeviceGetCount()
-        if device_count == 0:
-            return gpu_info
+        if result.returncode == 0 and result.stdout.strip():
+            # Parse the CSV output: util,temp,mem_used,mem_total,fan_speed,power
+            values = result.stdout.strip().split(', ')
+            if len(values) >= 6:
+                gpu_info['usage_percent'] = float(values[0]) if values[0] != '[Not Supported]' else 0
+                gpu_info['temperature'] = float(values[1]) if values[1] != '[Not Supported]' else 0
+                gpu_info['memory_used'] = int(float(values[2]) * 1024 * 1024) if values[2] != '[Not Supported]' else 0  # Convert MB to bytes
+                gpu_info['memory_total'] = int(float(values[3]) * 1024 * 1024) if values[3] != '[Not Supported]' else 0  # Convert MB to bytes
+                gpu_info['fan_speed'] = float(values[4]) if values[4] != '[Not Supported]' else 0
+                gpu_info['power_usage'] = float(values[5]) if values[5] != '[Not Supported]' else 0
+                
+                # Calculate memory percentage
+                if gpu_info['memory_total'] > 0:
+                    gpu_info['memory_percent'] = (gpu_info['memory_used'] / gpu_info['memory_total']) * 100
+                
+                gpu_info['available'] = True
         
-        # Get first GPU (index 0)
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        
-        # Get GPU utilization
-        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        gpu_info['usage_percent'] = util.gpu
-        
-        # Get GPU temperature
-        temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-        gpu_info['temperature'] = temp
-        
-        # Get GPU memory info
-        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        gpu_info['memory_used'] = mem_info.used
-        gpu_info['memory_total'] = mem_info.total
-        gpu_info['memory_percent'] = (mem_info.used / mem_info.total) * 100
-        
-        gpu_info['available'] = True
-        
-    except Exception as e:
-        # GPU not available or error occurred
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        # nvidia-smi not available or error occurred
         pass
     
     return gpu_info
@@ -636,7 +629,7 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
     
     # BTOP-style layout
     btop_start_x = MARGIN
-    btop_start_y = 11
+    btop_start_y = 10
     
     # Show all detected cores, but limit to what fits on display
     cores_pct = cpu_info['cores_pct']
@@ -737,10 +730,23 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
         gpu_temp_text = f"{gpu_temp}°C"
         draw.text((gpu_x, gpu_y+40), gpu_temp_text, font=f_main, fill=WHITE)
         
-        # GPU memory
-        gpu_mem_percent = gpu_info.get('memory_percent', 0)
-        gpu_mem_text = f"VRAM: {gpu_mem_percent:.1f}%"
+        # GPU memory (used/total format)
+        memory_used = gpu_info.get('memory_used', 0)
+        memory_total = gpu_info.get('memory_total', 0)
+        memory_used_gb = memory_used / (1024**3)  # Convert bytes to GB
+        memory_total_gb = memory_total / (1024**3)  # Convert bytes to GB
+        gpu_mem_text = f"{memory_used_gb:.1f} / {memory_total_gb:.1f} GB"
         draw.text((gpu_x, gpu_y+60), gpu_mem_text, font=f_main, fill=WHITE)
+        
+        # GPU fan speed
+        fan_speed = gpu_info.get('fan_speed', 0)
+        gpu_fan_text = f"{fan_speed} RPM"
+        draw.text((gpu_x, gpu_y+80), gpu_fan_text, font=f_main, fill=WHITE)
+        
+        # GPU power usage
+        power_usage = gpu_info.get('power_usage', 0)
+        gpu_power_text = f"{power_usage:.1f} W"
+        draw.text((gpu_x, gpu_y+100), gpu_power_text, font=f_main, fill=WHITE)
     
     return overlay
 
@@ -959,9 +965,9 @@ def main(preview=False):
         # Check GPU availability
         gpu_test = get_gpu_info()
         if gpu_test.get('available', False):
-            print("GPU monitoring: ENABLED (NVIDIA)")
+            print("GPU monitoring: ENABLED (NVIDIA - nvidia-smi)")
         else:
-            print("GPU monitoring: DISABLED (no NVIDIA GPU or pynvml)")
+            print("GPU monitoring: DISABLED (no NVIDIA GPU or nvidia-smi)")
         
         print("Press Ctrl+C to stop")
         print(f"Available themes: {len(THEMES)}")
