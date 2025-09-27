@@ -9,8 +9,8 @@ Usage:
     python thermalright_monitor.py [options]
     
 Options:
-    --refresh-rate FPS    Refresh rate in FPS (default: 15)
-    --theme INDEX         Initial theme 0-29 (default: 0)
+    --refresh-rate FPS    Refresh rate in FPS (default: 15.0)
+    --theme INDEX         Initial theme 0-29 (default: 2)
     --quality 1-100       JPEG quality (default: 80)
 
 Runtime Controls:
@@ -50,14 +50,28 @@ DISPLAY_WIDTH = 480
 DISPLAY_HEIGHT = 480
 MARGIN = 0
 
+# ============================================================================
+# Default Settings - All launch defaults defined here
+# ============================================================================
+
+# Default launch settings
+DEFAULT_REFRESH_RATE = 15.0
+DEFAULT_THEME_INDEX = 2
+DEFAULT_JPEG_QUALITY = 80
+DEFAULT_STATS_ENABLED = True
+
 # Background image settings
 BACKGROUND_IMAGE_PATH = None  # Will be set to assets/images/ if available
-BLUR_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 10 blur levels
-GRADIENT_LEVELS = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]  # 10 opacity levels
-current_blur_level = 0  # Index into BLUR_LEVELS
-current_gradient_level = 0  # Index into GRADIENT_LEVELS
+BLUR_LEVELS = [0, 2, 4, 6, 8]  # 5 blur levels
+GRADIENT_LEVELS = [1.0, 0.8, 0.6, 0.4, 0.2]  # 5 opacity levels
+DEFAULT_BLUR_LEVEL = 2  # Index into BLUR_LEVELS
+DEFAULT_GRADIENT_LEVEL = 2  # Index into GRADIENT_LEVELS
+
+# Runtime state (initialized from defaults)
+current_blur_level = DEFAULT_BLUR_LEVEL
+current_gradient_level = DEFAULT_GRADIENT_LEVEL
 background_image = None
-stats_enabled = True  # Toggle for showing/hiding all stats
+stats_enabled = DEFAULT_STATS_ENABLED
 
 # Colors (RGB format for JPEG compatibility)
 WHITE = (240, 240, 240)
@@ -270,7 +284,7 @@ THEMES = [
 ]
 
 # Global theme state (set by set_theme() in main())
-_current_theme_index = 0
+_current_theme_index = DEFAULT_THEME_INDEX
 
 # ============================================================================
 # Utility Functions
@@ -612,17 +626,17 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
     f_small = load_font(16)
     f_tiny = load_font(14)
     
-    # Layout parameters - optimized to fit all 20 cores
-    bar_width = 130  # Reduced from 200
-    bar_height = 18  # Reduced from 22
-    bar_spacing = 2  # Reduced from 3
-    temp_bar_width = 25  # Reduced from 40
-    temp_bar_height = 10  # Reduced from 12
-    label_width = 30  # Reduced from 35
+    # CPU Layout parameters - optimized to fit 20 cores on screen
+    bar_width = 130
+    bar_height = 21
+    bar_spacing = 2
+    temp_bar_width = 25
+    temp_bar_height = 15
+    label_width = 30
     
     # BTOP-style layout
     btop_start_x = MARGIN
-    btop_start_y = MARGIN
+    btop_start_y = 11
     
     # Show all detected cores, but limit to what fits on display
     cores_pct = cpu_info['cores_pct']
@@ -707,25 +721,26 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
     
     # Display GPU information (if available)
     if gpu_info and gpu_info.get('available', False):
-        gpu_y = height - 60  # Bottom area for GPU info
+        gpu_x = 330
+        gpu_y = 10  # Bottom area for GPU info
         
         # GPU title
-        draw.text((MARGIN, gpu_y), "GPU", font=f_main, fill=WHITE)
+        draw.text((gpu_x, gpu_y), "GPU", font=f_main, fill=WHITE)
         
         # GPU usage
         gpu_usage = gpu_info.get('usage_percent', 0)
         gpu_usage_text = f"{gpu_usage}%"
-        draw.text((MARGIN + 50, gpu_y), gpu_usage_text, font=f_main, fill=WHITE)
+        draw.text((gpu_x, gpu_y+20), gpu_usage_text, font=f_main, fill=WHITE)
         
         # GPU temperature
         gpu_temp = gpu_info.get('temperature', 0)
         gpu_temp_text = f"{gpu_temp}°C"
-        draw.text((MARGIN + 120, gpu_y), gpu_temp_text, font=f_main, fill=WHITE)
+        draw.text((gpu_x, gpu_y+40), gpu_temp_text, font=f_main, fill=WHITE)
         
         # GPU memory
         gpu_mem_percent = gpu_info.get('memory_percent', 0)
         gpu_mem_text = f"VRAM: {gpu_mem_percent:.1f}%"
-        draw.text((MARGIN + 200, gpu_y), gpu_mem_text, font=f_main, fill=WHITE)
+        draw.text((gpu_x, gpu_y+60), gpu_mem_text, font=f_main, fill=WHITE)
     
     return overlay
 
@@ -889,9 +904,9 @@ def main(preview=False):
     import argparse
     
     parser = argparse.ArgumentParser(description="System monitor for thermalright USB display")
-    parser.add_argument("--refresh-rate", type=float, default=15.0, help="Refresh rate in FPS (default: 15)")
-    parser.add_argument("--theme", type=int, default=2, help="Theme index (0-29). Press 't' to cycle themes at runtime.")
-    parser.add_argument("--quality", type=int, default=80, help="JPEG quality (1-100)")
+    parser.add_argument("--refresh-rate", type=float, default=DEFAULT_REFRESH_RATE, help=f"Refresh rate in FPS (default: {DEFAULT_REFRESH_RATE})")
+    parser.add_argument("--theme", type=int, default=DEFAULT_THEME_INDEX, help=f"Theme index (0-29). Press 't' to cycle themes at runtime. (default: {DEFAULT_THEME_INDEX})")
+    parser.add_argument("--quality", type=int, default=DEFAULT_JPEG_QUALITY, help=f"JPEG quality (1-100) (default: {DEFAULT_JPEG_QUALITY})")
     parser.add_argument("--preview", action='store_true', help="Show preview window instead of sending to device")
     
     args = parser.parse_args()
