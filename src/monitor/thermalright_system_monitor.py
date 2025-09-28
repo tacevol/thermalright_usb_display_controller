@@ -359,7 +359,7 @@ def keyboard_listener():
 # Global CPU history storage
 _cpu_history = []
 _core_histories = [[] for _ in range(NUM_CPU_CORES)]  # Support all detected cores
-_buffer_size = 30
+_buffer_size = 26  # 130px ÷ 26 = 5px per sample (exact division)
 
 # Rolling averages for smooth display (separate from history)
 _core_usage_averages = [[] for _ in range(NUM_CPU_CORES)]  # Rolling averages for display
@@ -665,12 +665,12 @@ def create_monitoring_overlay(cpu_info: Dict, gpu_info: Dict = None, width: int 
         if len(core_history) > 0:
             # Calculate box width for each time sample
             num_samples = len(core_history)
-            box_width = bar_width // num_samples if num_samples > 0 else 1
+            box_width = bar_width // num_samples  # Exact division: 130 ÷ 26 = 5px per sample
             
             # Draw each time sample as a colored box
             for j, usage_value in enumerate(core_history):
                 box_x = heatmap_x + j * box_width
-                box_x2 = min(heatmap_x + bar_width, box_x + box_width)
+                box_x2 = box_x + box_width
                 
                 # Color based on CPU usage value using current theme
                 color = current_theme.get_color_for_usage(usage_value)
