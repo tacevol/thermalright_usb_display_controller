@@ -228,17 +228,17 @@ THEMES: List[Theme] = [
     Theme(
         background=(46, 52, 54), grid=(136, 138, 133), axes=(211, 215, 207),
         warn_band=(252, 175, 62), crit_band=(204, 0, 0), text=(211, 215, 207),
-        bar_usage=(0, 188, 212), bar_temp=(212, 212, 0), bar_vram=(138, 226, 52), bar_power=(114, 159, 207), bar_fan=(173, 127, 168),
+        bar_usage=(0, 188, 212), bar_temp=(255, 0, 64), bar_vram=(138, 226, 52), bar_power=(212, 212, 0), bar_fan=(173, 127, 168),
     ),
     Theme(
         background=(12, 12, 14), grid=(70, 70, 80), axes=(220, 220, 230),
         warn_band=(180, 120, 20), crit_band=(150, 30, 30), text=(230, 230, 235),
-        bar_usage=(60, 140, 255), bar_temp=(255, 140, 80), bar_vram=(20, 200, 220), bar_power=(220, 70, 95), bar_fan=(200, 180, 40),
+        bar_usage=(60, 140, 255), bar_temp=(255, 0, 64), bar_vram=(20, 200, 220), bar_power=(255, 255, 0), bar_fan=(200, 180, 40),
     ),
     Theme(
         background=(10, 10, 12), grid=(60, 60, 70), axes=(240, 240, 245),
         warn_band=(170, 110, 25), crit_band=(160, 40, 40), text=(230, 230, 230),
-        bar_usage=(80, 180, 255), bar_temp=(255, 120, 90), bar_vram=(40, 210, 230), bar_power=(240, 80, 110), bar_fan=(210, 190, 50),
+        bar_usage=(80, 180, 255), bar_temp=(255, 0, 64), bar_vram=(40, 210, 230), bar_power=(255, 255, 0), bar_fan=(210, 190, 50),
     ),
 ]
 
@@ -584,20 +584,24 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
         y = by + bar_h + 24  # Increased from 16 to 24 for more vertical space
 
     # GPU %
-    bar("GPU", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), theme.bar_usage)
-    # Temp
-    bar("Temp", f"{gpu.get('temperature', 0):.0f}°C", None, theme.bar_temp)
+    bar("Utilization", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), theme.bar_usage)
+    # Temp (scale 30-85°C to 0-100%)
+    temp = float(gpu.get("temperature", 0))
+    temp_pct = max(0, min(100, (temp - 30) / (85 - 30) * 100)) if temp > 0 else 0
+    bar("Temp", f"{temp:.0f}°C", temp_pct, theme.bar_temp)
     # VRAM
     used_mib = float(gpu.get("memory_used", 0.0))
     tot_mib = float(gpu.get("memory_total", 0.0)) or 1.0
     pct_mem = used_mib / tot_mib * 100.0
     bar("VRAM", f"{used_mib/1024:.1f}/{tot_mib/1024:.0f} GB", pct_mem, theme.bar_vram)
-    # Power
+    # Power (scale 0-450W to 0-100%)
     power = gpu.get("power_usage")
-    bar("Power", f"{power:.0f} W" if power is not None else "N/A", None, theme.bar_power)
-    # Fan
+    power_pct = max(0, min(100, (float(power) / 450 * 100))) if power is not None else 0
+    bar("Power", f"{power:.0f} W" if power is not None else "N/A", power_pct, theme.bar_power)
+    # Fan (scale 0-3000 RPM to 0-100%)
     fan = gpu.get("fan_speed")
-    bar("Fan", f"{fan:.0f} RPM" if fan is not None else "N/A", None, theme.bar_fan)
+    fan_pct = max(0, min(100, (float(fan) / 3000 * 100))) if fan is not None else 0
+    bar("Fan", f"{fan:.0f} RPM" if fan is not None else "N/A", fan_pct, theme.bar_fan)
 
 
 def create_monitoring_overlay(

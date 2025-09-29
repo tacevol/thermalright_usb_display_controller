@@ -218,9 +218,9 @@ def get_mocked_gpu_info(test_type="corners"):
             'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 95,
             'temperature': 85,
-            'memory_used': 20 * 1024 * 1024 * 1024,  # 20GB
-            'memory_total': 24 * 1024 * 1024 * 1024,  # 24GB
-            'memory_percent': 83.3,
+            'memory_used': 20 * 1024,  # 20GB in MiB (20 * 1024 MiB)
+            'memory_total': 16 * 1024,  # 16GB in MiB (16 * 1024 MiB)
+            'memory_percent': 125.0,  # 20GB used out of 16GB total = 125% (over limit)
             'fan_speed': 2500,
             'power_usage': 450
         }
@@ -230,9 +230,9 @@ def get_mocked_gpu_info(test_type="corners"):
             'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 60,
             'temperature': 65,
-            'memory_used': 12 * 1024 * 1024 * 1024,  # 12GB
-            'memory_total': 24 * 1024 * 1024 * 1024,  # 24GB
-            'memory_percent': 50.0,
+            'memory_used': 12 * 1024,  # 12GB in MiB (12 * 1024 MiB)
+            'memory_total': 16 * 1024,  # 16GB in MiB (16 * 1024 MiB)
+            'memory_percent': 75.0,  # 12GB used out of 16GB total = 75%
             'fan_speed': 1800,
             'power_usage': 280
         }
@@ -249,9 +249,9 @@ def get_mocked_gpu_info(test_type="corners"):
             'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': max(0, min(100, base_usage)),
             'temperature': max(30, min(85, base_temp)),
-            'memory_used': max(0, min(24, base_memory)) * 1024 * 1024 * 1024,  # GB to bytes
-            'memory_total': 24 * 1024 * 1024 * 1024,  # 24GB
-            'memory_percent': (max(0, min(24, base_memory)) / 24) * 100,
+            'memory_used': max(0, min(16, base_memory)) * 1024,  # GB to MiB
+            'memory_total': 16 * 1024,  # 16GB in MiB
+            'memory_percent': (max(0, min(16, base_memory)) / 16) * 100,
             'fan_speed': max(0, min(3000, base_fan)),
             'power_usage': max(0, min(450, base_power))
         }
@@ -261,9 +261,9 @@ def get_mocked_gpu_info(test_type="corners"):
             'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 78,
             'temperature': 72,
-            'memory_used': 16 * 1024 * 1024 * 1024,  # 16GB
-            'memory_total': 24 * 1024 * 1024 * 1024,  # 24GB
-            'memory_percent': 66.7,
+            'memory_used': 16 * 1024,  # 16GB in MiB (16 * 1024 MiB)
+            'memory_total': 16 * 1024,  # 16GB in MiB (16 * 1024 MiB)
+            'memory_percent': 100.0,  # 16GB used out of 16GB total = 100%
             'fan_speed': 2200,
             'power_usage': 320
         }
