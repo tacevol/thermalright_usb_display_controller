@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Thermalright Monitor
+Comment=Start Thermalright AIO Display Monitor
+Exec=/home/turbo/Documents/python/thermalright_usb_display_controller/start_monitor.sh
+Icon=applications-system
+Terminal=true
+Categories=System;Monitor;
+StartupNotify=true

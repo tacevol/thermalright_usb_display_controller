@@ -166,6 +166,18 @@ See `requirements.txt` for complete list:
    # Add udev rule for the device if needed
    ```
 
+## Auto-Start at Login
+
+To automatically start the monitor when you log in:
+
+Startup Applications (GUI - Recommended)
+1. Open "Startup Applications" (or "Session and Startup")
+2. Click "Add"
+3. Name: `Thermalright Monitor`
+4. Command: `/path/to/thermalright_usb_display_controller/start_monitor.sh`
+5. Save and it will start at login
+
+
 ## Usage
 
 ### Quick Start
