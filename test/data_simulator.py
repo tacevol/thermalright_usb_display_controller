@@ -111,19 +111,19 @@ def mock_cpu_percent_drifting(interval=None, percpu=False):
         cores = []
         for i in range(20):
             # Each core has a different frequency and phase for variety
-            base_usage = 30 + 20 * math.sin(current_time * 0.5 + i * 0.3)
+            base_usage = 50 + 40 * math.sin(current_time * 0.5 + i * 0.3)
             # Add some noise and different patterns
             if i % 4 == 0:  # Every 4th core has higher variation
-                base_usage += 15 * math.sin(current_time * 1.2 + i * 0.5)
+                base_usage += 25 * math.sin(current_time * 1.2 + i * 0.5)
             elif i % 3 == 0:  # Every 3rd core has medium variation
-                base_usage += 10 * math.cos(current_time * 0.8 + i * 0.4)
+                base_usage += 15 * math.cos(current_time * 0.8 + i * 0.4)
             
             # Clamp to 0-100%
             cores.append(max(0, min(100, base_usage)))
         return cores
     else:
         # Average usage also drifts
-        return 40 + 20 * math.sin(current_time * 0.3)
+        return 50 + 30 * math.sin(current_time * 0.3)
 
 def mock_subprocess_sensors_drifting():
     """Mock subprocess for sensors command with drifting temperatures"""
@@ -135,16 +135,16 @@ def mock_subprocess_sensors_drifting():
         
         # Generate drifting temperatures for 20 cores
         for i in range(20):
-            # Base temperature with drift
-            base_temp = 45 + 15 * math.sin(current_time * 0.4 + i * 0.2)
+            # Base temperature with drift - allow full range including warning/critical zones
+            base_temp = 60 + 35 * math.sin(current_time * 0.4 + i * 0.2)
             # Add some variation based on core index
             if i % 5 == 0:  # Every 5th core runs hotter
-                base_temp += 10 + 5 * math.sin(current_time * 0.6 + i * 0.3)
+                base_temp += 15 + 10 * math.sin(current_time * 0.6 + i * 0.3)
             elif i % 7 == 0:  # Every 7th core runs cooler
-                base_temp -= 5 + 3 * math.cos(current_time * 0.7 + i * 0.2)
+                base_temp -= 8 + 5 * math.cos(current_time * 0.7 + i * 0.2)
             
-            # Clamp to reasonable range (30-85°C)
-            temp = max(30, min(85, base_temp))
+            # Clamp to full range (30-105°C) to include warning and critical zones
+            temp = max(30, min(105, base_temp))
             stdout += f"Core {i}: +{temp:.1f}°C\n"
     
     return MockResult()
@@ -155,13 +155,13 @@ def mock_nvidia_smi(test_type="corners"):
         returncode = 0
         if test_type == "corners":
             # High usage, high temp
-            stdout = "NVIDIA GeForce RTX 4090, 95, 85, 20480, 24576, 2500, 450"
+            stdout = "NVIDIA GeForce RTX 5070 Ti, 95, 85, 20480, 24576, 2500, 450"
         elif test_type == "edges":
             # Medium usage, medium temp
-            stdout = "NVIDIA GeForce RTX 4090, 60, 65, 12288, 24576, 1800, 280"
+            stdout = "NVIDIA GeForce RTX 5070 Ti, 60, 65, 12288, 24576, 1800, 280"
         else:  # realistic
             # Realistic gaming load
-            stdout = "NVIDIA GeForce RTX 4090, 78, 72, 16384, 24576, 2200, 320"
+            stdout = "NVIDIA GeForce RTX 5070 Ti, 78, 72, 16384, 24576, 2200, 320"
     return MockResult()
 
 def get_drifting_gpu_info():
@@ -198,7 +198,7 @@ def run_monitor_with_mocked_data(test_type="corners"):
     
     with patch('thermalright_system_monitor.psutil.cpu_percent', side_effect=mock_cpu_func), \
          patch('thermalright_system_monitor.psutil.cpu_freq', return_value=mock_psutil_cpu_freq()), \
-         patch('thermalright_system_monitor.subprocess.run', return_value=mock_sensors_func()), \
+         patch('thermalright_system_monitor.subprocess.run', side_effect=lambda *args, **kwargs: mock_sensors_func()), \
          patch('thermalright_system_monitor.get_cpu_model', return_value=model_name), \
          patch('thermalright_system_monitor.get_gpu_info', side_effect=gpu_info if callable(gpu_info) else lambda: gpu_info):
         
@@ -215,7 +215,7 @@ def get_mocked_gpu_info(test_type="corners"):
     if test_type == "corners":
         return {
             'available': True,
-            'name': 'NVIDIA GeForce RTX 4090',
+            'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 95,
             'temperature': 85,
             'memory_used': 20 * 1024 * 1024 * 1024,  # 20GB
@@ -227,7 +227,7 @@ def get_mocked_gpu_info(test_type="corners"):
     elif test_type == "edges":
         return {
             'available': True,
-            'name': 'NVIDIA GeForce RTX 4090',
+            'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 60,
             'temperature': 65,
             'memory_used': 12 * 1024 * 1024 * 1024,  # 12GB
@@ -246,7 +246,7 @@ def get_mocked_gpu_info(test_type="corners"):
         
         return {
             'available': True,
-            'name': 'NVIDIA GeForce RTX 4090',
+            'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': max(0, min(100, base_usage)),
             'temperature': max(30, min(85, base_temp)),
             'memory_used': max(0, min(24, base_memory)) * 1024 * 1024 * 1024,  # GB to bytes
@@ -258,7 +258,7 @@ def get_mocked_gpu_info(test_type="corners"):
     else:  # realistic
         return {
             'available': True,
-            'name': 'NVIDIA GeForce RTX 4090',
+            'name': 'NVIDIA GeForce RTX 5070 Ti',
             'usage_percent': 78,
             'temperature': 72,
             'memory_used': 16 * 1024 * 1024 * 1024,  # 16GB

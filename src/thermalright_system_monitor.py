@@ -148,6 +148,12 @@ class Theme:
 
 
 THEMES: List[Theme] = [
+    # Adapta theme (from btop-legacy branch)
+    Theme(
+        background=(46, 52, 54), grid=(136, 138, 133), axes=(211, 215, 207),
+        warn_band=(252, 175, 62), crit_band=(204, 0, 0), text=(211, 215, 207),
+        bar_usage=(0, 188, 212), bar_temp=(212, 212, 0), bar_vram=(138, 226, 52), bar_power=(114, 159, 207), bar_fan=(173, 127, 168),
+    ),
     Theme(
         background=(12, 12, 14), grid=(70, 70, 80), axes=(220, 220, 230),
         warn_band=(180, 120, 20), crit_band=(150, 30, 30), text=(230, 230, 235),
@@ -164,30 +170,33 @@ _current_theme_index = 0
 
 
 def _temp_to_color(t: float, theme: Theme) -> Tuple[int, int, int]:
-    # Cool -> Warm gradient
-    # <=40: cyan-ish; 40-70: green; 70-85: yellow; >85: orange-red
+    # Adapta theme temperature gradient (from btop-legacy)
+    # cpu_start=(0, 188, 212), cpu_mid=(212, 212, 0), cpu_end=(255, 0, 64)
     if t <= 40:
-        return (90, 200, 255)
+        # Cool cyan (Adapta start color)
+        return theme.bar_usage  # (0, 188, 212)
     if t <= 70:
+        # Cyan to yellow transition
         a = (t - 40) / 30.0
+        cyan = theme.bar_usage  # (0, 188, 212)
+        yellow = theme.bar_temp  # (212, 212, 0)
         return (
-            int(90 * (1 - a) + 60 * a),
-            int(200 * (1 - a) + 220 * a),
-            int(255 * (1 - a) + 120 * a),
+            int(cyan[0] * (1 - a) + yellow[0] * a),
+            int(cyan[1] * (1 - a) + yellow[1] * a),
+            int(cyan[2] * (1 - a) + yellow[2] * a),
         )
     if t <= 85:
+        # Yellow to red transition
         a = (t - 70) / 15.0
+        yellow = theme.bar_temp  # (212, 212, 0)
+        red = (255, 0, 64)  # Adapta end color
         return (
-            int(60 * (1 - a) + 240 * a),
-            int(220 * (1 - a) + 200 * a),
-            int(120 * (1 - a) + 40 * a),
+            int(yellow[0] * (1 - a) + red[0] * a),
+            int(yellow[1] * (1 - a) + red[1] * a),
+            int(yellow[2] * (1 - a) + red[2] * a),
         )
-    a = min(1.0, (t - 85) / 15.0)
-    return (
-        int(240 * (1 - a) + 255 * a),
-        int(200 * (1 - a) + 120 * a),
-        int(40 * (1 - a) + 90 * a),
-    )
+    # Red for high temperatures
+    return (255, 0, 64)
 
 
 # ------------------------------ CPU history ------------------------------
@@ -359,14 +368,14 @@ def _draw_cpu_plot(draw: ImageDraw.ImageDraw, img: Image.Image, cpu: Dict[str, o
     ox, oy = origin
     w, h = size
     # Background transparent since full bg is already drawn
-    # Bands
+    # Critical and Warning Bands
     warn_top = int(_map(90.0, 30.0, 105.0, oy + h, oy))
     warn_bottom = int(_map(80.0, 30.0, 105.0, oy + h, oy))
     crit_top = oy
     crit_bottom = warn_top
 
     warn_col = (*theme.warn_band, max(0, min(255, int(255 * 0.35))))
-    crit_col = (*theme.crit_band, max(0, min(255, int(255 * 0.45))))
+    crit_col = (*theme.crit_band, max(0, min(255, int(255 * 0.25))))
     band = Image.new("RGBA", img.size, (0, 0, 0, 0))
     bd = ImageDraw.Draw(band)
     bd.rectangle([ox, warn_top, ox + w, warn_bottom], fill=warn_col)
@@ -433,14 +442,16 @@ def _draw_cpu_plot(draw: ImageDraw.ImageDraw, img: Image.Image, cpu: Dict[str, o
         temps = list(temps) + [temps[-1] if temps else 50.0] * (n - len(temps))
     if len(per_core) < n:
         per_core = list(per_core) + [0.0] * (n - len(per_core))
-    r = 6
+
+    r = 6 # circle radius
     for i in range(n):
         t = float(temps[i])
         u = float(per_core[i])
-        x = int(_map(u, 0.0, 100.0, ox + 3, ox + w - 3))
-        y = int(_map(t, 30.0, 105.0, oy + h - 3, oy + 3))
+        x = int(_map(u, 0.0, 100.0, ox, ox + w))
+        y = int(_map(t, 30.0, 105.0, oy + h, oy))
         color = _temp_to_color(t, THEMES[_current_theme_index])
-        draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
+        # Draw circle with white outline
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=color, outline=(255, 255, 255), width=1)
 
 
 def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, object], theme: Theme, *, origin: Tuple[int, int], size: Tuple[int, int], panel_gray_opacity: float):

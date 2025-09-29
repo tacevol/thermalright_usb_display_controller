@@ -66,3 +66,6 @@ pillow.libs/
 # USB capture files - security sensitive
 assets/data/*.pcap
 assets/data/*.bin
+
+# Reference files
+thermalright_system_monitor_BTOP_style.py
