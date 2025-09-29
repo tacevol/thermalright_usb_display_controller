@@ -69,3 +69,7 @@ assets/data/*.bin
 
 # Reference files
 thermalright_system_monitor_BTOP_style.py
+
+# Personal startup files (keep local, don't push to GitHub)
+start_monitor.sh
+thermalright-monitor.desktop

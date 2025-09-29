@@ -170,12 +170,31 @@ See `requirements.txt` for complete list:
 
 To automatically start the monitor when you log in:
 
-Startup Applications (GUI - Recommended)
+### Option 1: Startup Applications (GUI - Recommended)
 1. Open "Startup Applications" (or "Session and Startup")
 2. Click "Add"
 3. Name: `Thermalright Monitor`
-4. Command: `/path/to/thermalright_usb_display_controller/start_monitor.sh`
+4. Command: `/path/to/your/project/run_monitor.py`
 5. Save and it will start at login
+
+### Option 2: Create a Startup Script
+Create a simple startup script in your project directory:
+```bash
+#!/bin/bash
+cd /path/to/your/project
+source venv/bin/activate
+python run_monitor.py
+```
+
+Then use the full path to this script in Startup Applications instead of the Python command.
+
+### Option 3: Manual Launch
+Run the monitor manually when needed:
+```bash
+cd /path/to/your/project
+source venv/bin/activate
+python run_monitor.py
+```
 
 
 ## Usage
