@@ -1,6 +1,6 @@
 # Thermalright USB Display System Monitor
 
-A real-time system monitor that displays CPU and GPU usage data on Thermalright USB displays. Features BTOP-style themes, scatter plot visualization, and runtime controls.
+A real-time system monitor that displays CPU and GPU usage data on Thermalright USB displays. Features temperature-based color schemes, scatter plot visualization, and runtime controls.
 
 ## Overview
 
@@ -8,10 +8,9 @@ This project provides a complete system monitoring solution for Thermalright USB
 
 - **Real-time CPU Monitoring**: Scatter plot visualization showing CPU usage vs temperature for all cores
 - **GPU Monitoring**: NVIDIA GPU metrics including usage, temperature, VRAM, power, and fan speed
-- **30 BTOP-style Themes**: Authentic color themes with runtime cycling
 - **Background Image Support**: Customizable background images with blur and gradient effects
-- **Runtime Controls**: Interactive theme cycling, blur/gradient adjustment, and stats toggling
-- **Data Simulation**: Comprehensive testing tools with drifting data patterns
+- **Runtime Controls**: Interactive keyboard controls for theme cycling, blur/gradient adjustment, and stats toggling
+- **Data Simulation**: Comprehensive testing tools with realistic data patterns
 
 ## Project Structure
 
@@ -31,7 +30,7 @@ thermalright_usb_display_controller/
 │   └── data/                      # Binary payloads and captures
 ├── run_monitor.py                 # Convenience script to run monitor
 ├── requirements.txt               # Python dependencies
-└── CHANGELOG.md                   # Project changelog
+└── README.md                      # This file
 ```
 
 ## Main Scripts
@@ -43,7 +42,6 @@ The primary system monitor featuring:
 - **CPU Scatter Plot**: Visualization of CPU cores as colored circles positioned by usage (x-axis) and temperature (y-axis)
 - **Temperature Zones**: Transparent overlay showing critical (≥90°C) and warning (80-90°C) temperature ranges
 - **GPU Metrics**: Real-time display of GPU usage, temperature, VRAM, power consumption, and fan speed
-- **Theme System**: 30 authentic BTOP color themes with smooth color gradients
 - **Background Images**: Support for custom background images with configurable blur and gradient effects
 - **Runtime Controls**: Interactive keyboard controls for theme cycling and display adjustments
 
@@ -52,17 +50,16 @@ The primary system monitor featuring:
 python src/thermalright_system_monitor.py [options]
 
 Options:
-  --refresh-rate FPS    Refresh rate in FPS (default: 15.0)
-  --theme INDEX         Initial theme 0-29 (default: 2)
-  --quality 1-100       JPEG quality (default: 80)
-  --preview             Show preview window instead of sending to device
+  --preview         Show preview window instead of sending to device
+  --refresh-rate    Refresh rate in FPS (default: 15.0)
 
 Runtime Controls:
   Press 't' to cycle themes
-  Press 'b' to cycle blur levels
-  Press 'g' to cycle gradient levels
+  Press 'b' to cycle blur levels (0, 2, 4, 6, 8px)
+  Press 'g' to cycle gradient levels (0.0, 0.2, 0.4, 0.6, 0.8)
   Press 's' to toggle stats display
-  Press 'q' to quit
+  Press 'i' to cycle background images
+  Press Ctrl+C to quit
 ```
 
 ### `run_monitor.py` (Convenience Script)
@@ -196,7 +193,6 @@ source venv/bin/activate
 python run_monitor.py
 ```
 
-
 ## Usage
 
 ### Quick Start
@@ -212,9 +208,6 @@ python run_monitor.py
 ```bash
 # High performance mode (20 FPS)
 python src/thermalright_system_monitor.py --refresh-rate 20
-
-# Custom theme and quality
-python src/thermalright_system_monitor.py --theme 5 --quality 90
 
 # Preview mode for development
 python src/thermalright_system_monitor.py --preview
@@ -238,7 +231,7 @@ python test/send_image_patched.py assets/images/moose.png
 - **Scatter Plot Visualization**: CPU cores displayed as colored circles
 - **Real-time Data**: Usage and temperature data updated continuously
 - **Temperature Zones**: Visual indicators for critical and warning temperatures
-- **Smooth Display**: Rolling averages for stable visualization
+- **Smooth Display**: Exponential moving averages for stable visualization
 - **Multi-core Support**: Automatically detects and monitors all CPU cores
 
 ### GPU Monitoring
@@ -248,21 +241,21 @@ python test/send_image_patched.py assets/images/moose.png
 - **Graceful Fallback**: Works without GPU if nvidia-smi is unavailable
 
 ### Theme System
-- **30 Authentic Themes**: Based on popular BTOP color schemes
+- **3 Built-in Themes**: Including Adapta theme with authentic BTOP styling
 - **Runtime Cycling**: Press 't' to cycle through themes while running
-- **Color Gradients**: Smooth color transitions based on usage and temperature
+- **Color Gradients**: Temperature-based color transitions (blue → green → yellow → orange → red → dark red)
 - **Consistent Styling**: All UI elements use the same theme colors
 
 ### Background Images
-- **Custom Backgrounds**: Support for custom background images
+- **Custom Backgrounds**: Support for custom background images from `assets/images/`
 - **Blur Effects**: 5 levels of Gaussian blur (0, 2, 4, 6, 8 radius)
-- **Gradient Overlays**: 5 levels of opacity (1.0, 0.8, 0.6, 0.4, 0.2)
-- **Runtime Adjustment**: Press 'b' for blur, 'g' for gradient levels
+- **Gradient Overlays**: 5 levels of opacity (0.0, 0.2, 0.4, 0.6, 0.8)
+- **Runtime Adjustment**: Press 'b' for blur, 'g' for gradient levels, 'i' to cycle images
 
 ### Performance
 - **High Refresh Rates**: Support up to 20 FPS
 - **Optimized Rendering**: Efficient image processing and USB communication
-- **Caching**: Font and background processing caching for performance
+- **Caching**: Background processing caching for performance
 - **Error Handling**: Robust error handling with logging
 
 ## Configuration
@@ -270,17 +263,17 @@ python test/send_image_patched.py assets/images/moose.png
 ### Display Settings
 - **Resolution**: 480x480 pixels
 - **Format**: JPEG encoding
-- **Quality**: Configurable 1-100 (default: 80)
+- **Quality**: Fixed at 80 for optimal performance
 
 ### Performance Settings
 - **Refresh Rate**: 1-20 FPS (default: 15)
 - **CPU Sampling**: Optimized for high refresh rates
-- **Memory Management**: Efficient rolling averages and caching
+- **Memory Management**: Efficient exponential moving averages and caching
 
 ### Theme Settings
-- **Default Theme**: Index 2 (Adapta)
-- **Theme Range**: 0-29 (30 total themes)
-- **Color Mapping**: Usage-based and temperature-based gradients
+- **Default Theme**: Index 0 (Adapta)
+- **Theme Range**: 0-2 (3 total themes)
+- **Color Mapping**: Temperature-based gradients for CPU dots
 
 ## Troubleshooting
 
@@ -328,7 +321,3 @@ This project is for educational and research purposes. Use responsibly and in ac
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
-
-## Changelog
-
-See `CHANGELOG.md` for detailed version history and changes.
