@@ -246,33 +246,45 @@ _current_theme_index = 0
 
 
 def _temp_to_color(t: float, theme: Theme) -> Tuple[int, int, int]:
-    # Adapta theme temperature gradient (from btop-legacy)
-    # cpu_start=(0, 188, 212), cpu_mid=(212, 212, 0), cpu_end=(255, 0, 64)
-    if t <= 40:
-        # Cool cyan (Adapta start color)
-        return theme.bar_usage  # (0, 188, 212)
-    if t <= 70:
-        # Cyan to yellow transition
-        a = (t - 40) / 30.0
-        cyan = theme.bar_usage  # (0, 188, 212)
-        yellow = theme.bar_temp  # (212, 212, 0)
+    # Temperature-based color gradient: blue -> green -> yellow -> orange -> red -> dark red
+    if t <= 30:
+        # Cool blue
+        return (0, 100, 255)
+    elif t <= 50:
+        # Blue to green transition
+        a = (t - 30) / 20.0
         return (
-            int(cyan[0] * (1 - a) + yellow[0] * a),
-            int(cyan[1] * (1 - a) + yellow[1] * a),
-            int(cyan[2] * (1 - a) + yellow[2] * a),
+            int(0 * (1 - a) + 0 * a),
+            int(100 * (1 - a) + 255 * a),
+            int(255 * (1 - a) + 0 * a),
         )
-    if t <= 85:
-        # Yellow to red transition
-        a = (t - 70) / 15.0
-        yellow = theme.bar_temp  # (212, 212, 0)
-        red = (255, 0, 64)  # Adapta end color
+    elif t <= 65:
+        # Green to yellow transition
+        a = (t - 50) / 15.0
         return (
-            int(yellow[0] * (1 - a) + red[0] * a),
-            int(yellow[1] * (1 - a) + red[1] * a),
-            int(yellow[2] * (1 - a) + red[2] * a),
+            int(0 * (1 - a) + 255 * a),
+            int(255 * (1 - a) + 255 * a),
+            int(0 * (1 - a) + 0 * a),
         )
-    # Red for high temperatures
-    return (255, 0, 64)
+    elif t <= 80:
+        # Yellow to orange transition
+        a = (t - 65) / 15.0
+        return (
+            int(255 * (1 - a) + 255 * a),
+            int(255 * (1 - a) + 165 * a),
+            int(0 * (1 - a) + 0 * a),
+        )
+    elif t <= 95:
+        # Orange to red transition
+        a = (t - 80) / 15.0
+        return (
+            int(255 * (1 - a) + 255 * a),
+            int(165 * (1 - a) + 0 * a),
+            int(0 * (1 - a) + 0 * a),
+        )
+    else:
+        # Dark red for critical temperatures
+        return (180, 0, 0)
 
 
 # ------------------------------ CPU history ------------------------------
