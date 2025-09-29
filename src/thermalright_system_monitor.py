@@ -31,6 +31,7 @@ import logging
 import math
 import os
 import select
+import struct
 import sys
 import termios
 import time
@@ -43,10 +44,19 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import psutil
+import usb.core
+import usb.util
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
 
 TARGET_W, TARGET_H = 480, 480
+
+# USB Device constants
+VENDOR_ID = 0x87ad
+PRODUCT_ID = 0x70db
+CHUNK_SIZE = 4096
+HEADER_LEN = 64
+LEN_FIELD_OFF = 60
 
 
 # ------------------------------ Utility ------------------------------
@@ -135,6 +145,66 @@ def _load_font_mono(size: int, bold: bool = False) -> ImageFont.ImageFont:
 
 def _get_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
+
+
+# ------------------------------ Device Communication ------------------------------
+def _split_frame(frame_data: bytes) -> Tuple[bytes, bytes, bytes]:
+    """Split frame data into header, JPEG, and tail."""
+    soi = frame_data.find(b"\xff\xd8")
+    eoi = frame_data.rfind(b"\xff\xd9")
+    if soi < 0 or eoi < 0:
+        raise RuntimeError("SOI/EOI not found in frame data")
+    return frame_data[:soi], frame_data[soi:eoi+2], frame_data[eoi+2:]
+
+
+def _open_device():
+    """Open and configure the USB device."""
+    device = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
+    if device is None:
+        raise RuntimeError(f"Device {VENDOR_ID:04x}:{PRODUCT_ID:04x} not found")
+    
+    try:
+        device.set_configuration()
+        cfg = device.get_active_configuration()
+        
+        # Find OUT endpoint
+        for interface in cfg:
+            try:
+                if device.is_kernel_driver_active(interface.bInterfaceNumber):
+                    device.detach_kernel_driver(interface.bInterfaceNumber)
+            except Exception:
+                pass
+            usb.util.claim_interface(device, interface.bInterfaceNumber)
+            for endpoint in interface:
+                if usb.util.endpoint_direction(endpoint.bEndpointAddress) == usb.util.ENDPOINT_OUT:
+                    return device, interface, endpoint
+        
+        raise RuntimeError("No OUT endpoint found")
+    except Exception as e:
+        raise RuntimeError(f"Failed to configure device: {e}")
+
+
+def _send_payload(endpoint, payload: bytes):
+    """Send payload to device in chunks."""
+    offset = 0
+    while offset < len(payload):
+        chunk_size = min(CHUNK_SIZE, len(payload) - offset)
+        endpoint.write(payload[offset:offset+chunk_size], timeout=3000)
+        offset += chunk_size
+
+
+def _create_device_payload(image: Image.Image, header: bytes, tail: bytes, quality: int = 80) -> bytes:
+    """Create device payload from image."""
+    # Convert to JPEG
+    bio = io.BytesIO()
+    image.save(bio, format="JPEG", quality=quality, optimize=False, progressive=False, subsampling="4:2:0")
+    jpeg_data = bio.getvalue()
+    
+    # Create header copy and patch length
+    header_copy = bytearray(header[:HEADER_LEN])
+    struct.pack_into("<I", header_copy, LEN_FIELD_OFF, len(jpeg_data))
+    
+    return bytes(header_copy) + jpeg_data + tail
 
 
 # ------------------------------ Themes ------------------------------
@@ -616,10 +686,10 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
     # Cache processed backgrounds per (bg_index, blur_idx, gray_idx, show_stats)
     bg_cache: Dict[Tuple[int, int, int, bool], Image.Image] = {}
 
-    # EMA smoothing state for CPU
+    # EMA smoothing state for CPU - moderate smoothing for balanced drifting
     prev_per_core: List[float] = []
     prev_temps: List[float] = []
-    alpha = 0.3  # smoothing factor
+    alpha = 0.05  # Gentle smoothing (10% new, 90% previous) - less jittery
 
     period = 1.0 / max(1e-6, refresh_rate)
     logging.info("Monitor started (preview=%s, target_fps=%.1f)", preview, refresh_rate)
@@ -646,6 +716,35 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
     # Raw stdin for key handling
     if sys.stdin.isatty():
         pass
+
+    # Device mode: initialize USB device and load reference frame
+    device = None
+    interface = None
+    endpoint = None
+    header = None
+    tail = None
+    
+    if not preview:
+        try:
+            # Load reference frame data
+            frame_bin_path = root / "assets" / "data" / "frame.bin"
+            if not frame_bin_path.exists():
+                raise RuntimeError(f"Reference frame not found: {frame_bin_path}")
+            
+            frame_data = frame_bin_path.read_bytes()
+            header, _, tail = _split_frame(frame_data)
+            print(f"Loaded reference frame, header length: {len(header)}")
+            
+            # Open device
+            device, interface, endpoint = _open_device()
+            print("Device opened successfully")
+            print(f"Starting system monitor on device (refresh rate: {refresh_rate:.1f} FPS)")
+            
+        except Exception as e:
+            logging.error("Failed to initialize device: %s", e)
+            print(f"Device initialization failed: {e}")
+            print("Falling back to preview mode...")
+            preview = True
 
     # Preview mode: use Tkinter window for efficient updates
     if preview:
@@ -712,18 +811,22 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
 
             cpu = get_cpu_info(0.0)  # No sampling delay for better FPS
             gpu = get_gpu_info()
-            # Smooth CPU values
+            # Moderate smoothing for balanced drifting
             cur_pc = list(cpu.get("per_core", []))
             cur_t = list(cpu.get("temps", []))
+            
+            # Initialize arrays if needed
             if len(prev_per_core) < len(cur_pc):
                 prev_per_core.extend([cur_pc[len(prev_per_core)]] * (len(cur_pc) - len(prev_per_core)))
             if len(prev_temps) < len(cur_t):
                 prev_temps.extend([cur_t[len(prev_temps)]] * (len(cur_t) - len(prev_temps)))
+            
             if cur_pc:
                 sm_pc = [alpha * float(v) + (1 - alpha) * float(prev_per_core[i] if i < len(prev_per_core) else v) 
                         for i, v in enumerate(cur_pc)]
                 prev_per_core = sm_pc
                 cpu["per_core"] = sm_pc
+                
             if cur_t:
                 sm_t = [alpha * float(v) + (1 - alpha) * float(prev_temps[i] if i < len(prev_temps) else v) 
                        for i, v in enumerate(cur_t)]
@@ -802,18 +905,22 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
                 # Data
                 cpu = get_cpu_info(0.0)  # No sampling delay for better FPS
                 gpu = get_gpu_info()
-                # Smooth CPU values
+                # Moderate smoothing for balanced drifting
                 cur_pc = list(cpu.get("per_core", []))
                 cur_t = list(cpu.get("temps", []))
+                
+                # Initialize arrays if needed
                 if len(prev_per_core) < len(cur_pc):
                     prev_per_core.extend([cur_pc[len(prev_per_core)]] * (len(cur_pc) - len(prev_per_core)))
                 if len(prev_temps) < len(cur_t):
                     prev_temps.extend([cur_t[len(prev_temps)]] * (len(cur_t) - len(prev_temps)))
+                
                 if cur_pc:
                     sm_pc = [alpha * float(v) + (1 - alpha) * float(prev_per_core[i] if i < len(prev_per_core) else v) 
                             for i, v in enumerate(cur_pc)]
                     prev_per_core = sm_pc
                     cpu["per_core"] = sm_pc
+                    
                 if cur_t:
                     sm_t = [alpha * float(v) + (1 - alpha) * float(prev_temps[i] if i < len(prev_temps) else v) 
                            for i, v in enumerate(cur_t)]
@@ -830,7 +937,15 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
                 else:
                     frame_img = bg
 
-                # TODO: device send (not implemented in this pass)
+                # Send to device
+                if not preview and device and endpoint:
+                    try:
+                        payload = _create_device_payload(frame_img, header, tail, quality=80)
+                        _send_payload(endpoint, payload)
+                    except Exception as e:
+                        logging.error("Failed to send to device: %s", e)
+                        print(f"Device send failed: {e}")
+                        # Continue running even if send fails
 
                 # Frame pacing and FPS tracking
                 frame_count += 1
@@ -844,7 +959,13 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
                 if sleep_time > 0:
                     time.sleep(sleep_time)
     finally:
-        pass
+        # Cleanup device resources
+        if device and interface:
+            try:
+                usb.util.release_interface(device, interface.bInterfaceNumber)
+                device.attach_kernel_driver(interface.bInterfaceNumber)
+            except Exception:
+                pass
 
 
 __all__ = [
