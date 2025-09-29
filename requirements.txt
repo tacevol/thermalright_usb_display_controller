@@ -1,15 +1,42 @@
-# Core dependencies
-pyusb>=1.3.1
-Pillow>=9.0.0
-mss>=6.0.0
+# Core dependencies for Thermalright USB Display System Monitor
 
-# System monitoring
+# USB device communication
+pyusb>=1.3.1
+
+# Image processing and manipulation
+Pillow>=9.0.0
+
+# System monitoring and process information
 psutil>=5.8.0
 
-# NVIDIA GPU monitoring
-pynvml>=11.0.0
+# GUI toolkit for preview window (optional - only needed for preview mode)
+# Note: tkinter is usually included with Python, but may need python3-tk on some systems
+# On Ubuntu/Debian: sudo apt install python3-tk
 
-# Development and testing (optional)
+# NVIDIA GPU monitoring (optional - only needed for GPU features)
+# Install with: pip install nvidia-ml-py
+# Note: Requires NVIDIA drivers and nvidia-smi to be installed
+nvidia-ml-py>=11.0.0
+
+# Development and testing dependencies (optional)
+# Uncomment if you need these for development:
+
+# Screen capture (for testing and development)
+# mss>=6.0.0
+
+# Font processing (for advanced font handling)
 # fonttools>=4.0.0
 
+# Scientific computing (for advanced data analysis)
+# numpy>=1.20.0
 
+# Data visualization (for development and analysis)
+# matplotlib>=3.5.0
+
+# HTTP requests (for potential future features)
+# requests>=2.25.0
+
+# Note: The following are system dependencies that need to be installed separately:
+# - lm-sensors (for CPU temperature readings)
+# - NVIDIA drivers and nvidia-smi (for GPU monitoring)
+# - USB device permissions (udev rules for Linux)

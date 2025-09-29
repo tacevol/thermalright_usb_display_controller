@@ -6,7 +6,7 @@ VENDOR = 0x87ad
 PRODUCT = 0x70db
 
 # Get the project root directory
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent
 INTERVAL_S = 2.9       # try 1 Hz first; we can tweak
 
 def find_out_endpoint(dev):

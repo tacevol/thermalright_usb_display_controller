@@ -9,7 +9,7 @@ PRODUCT = 0x70db
 CHUNK  = 4096
 
 # Get the project root directory
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent
 FRAME_BIN = PROJECT_ROOT / "assets" / "data" / "frame.bin"     # reference capture you used before (to steal header & tail)
 HEADER_LEN = 64             # analyzer showed common header length = 64
 LEN_FIELD_OFF = 60          # u32 little-endian = JPEG length (bytes)

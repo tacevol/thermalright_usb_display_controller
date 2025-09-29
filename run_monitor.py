@@ -13,7 +13,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / "src"))
 
 # Import and run the main monitor
-from monitor.thermalright_system_monitor import main
+from thermalright_system_monitor import main
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run the Thermalright system monitor')
