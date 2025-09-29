@@ -20,6 +20,12 @@ Exports expected by tests:
 
 from __future__ import annotations
 
+# Plot area configuration
+PLOT_X = 25      # X position of plot bottom-left corner
+PLOT_Y = 50      # Y position of plot bottom-left corner  
+PLOT_W = 250     # Plot area width
+PLOT_H = 400     # Plot area height
+
 import io
 import logging
 import math
@@ -443,7 +449,7 @@ def _draw_cpu_plot(draw: ImageDraw.ImageDraw, img: Image.Image, cpu: Dict[str, o
     if len(per_core) < n:
         per_core = list(per_core) + [0.0] * (n - len(per_core))
 
-    r = 6 # circle radius
+    r = 8 # circle radius
     for i in range(n):
         t = float(temps[i])
         u = float(per_core[i])
@@ -463,12 +469,14 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
     pd.rectangle([ox, oy, ox + w, oy + h], fill=(0, 0, 0, int(255 * panel_gray_opacity)))
     img.alpha_composite(panel)
 
-    f_title = _load_font_mono(18)
-    f_label = _load_font_mono(14)
-    f_value = _load_font_mono(14)
+    f_title = _load_font_mono(20, bold=True)
+    f_label = _load_font_mono(16, bold=True)  
+    f_value = _load_font_mono(16)  
 
-    x = ox + 20  # Move GPU content 10px left from original position
-    y = oy + 10
+    bar_margin = 10  # Margin on both left and right sides for bars and title
+    x = ox + bar_margin  # Use bar_margin for consistent positioning
+    
+    y = oy +  120 # Vertical shift of GPU panel
 
     if not gpu.get("available"):
         draw.text((x, y), "GPU not available", font=f_label, fill=theme.text)
@@ -481,26 +489,29 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
         if name.startswith(prefix):
             name = name[len(prefix):]
     draw.text((x, y), name, font=f_title, fill=theme.text)
-    y += 32
+    y += 50
 
     def bar(label: str, value_str: str, pct: Optional[float], color: Tuple[int, int, int]):
         nonlocal y
-        bar_w = w - 20
+        bar_w = w - (2 * bar_margin)  # Total width minus margins on both sides
         bar_h = 8
-        # Label left, value right
-        draw.text((x, y - 4), label, font=f_label, fill=theme.text)
+        # Label left-aligned to bar start, value right-aligned to bar end
+        bar_x = ox + bar_margin  # Same as bar start position
+        bar_end_x = bar_x + bar_w  # Bar end position
+        draw.text((bar_x, y - 4), label, font=f_label, fill=theme.text)
         # Measure value text width using textbbox for compatibility
         bbox = draw.textbbox((0, 0), value_str, font=f_value)
         vw = bbox[2] - bbox[0]
-        draw.text((ox + w - 10 - vw, y - 4), value_str, font=f_value, fill=theme.text)
+        draw.text((bar_end_x - vw, y - 4), value_str, font=f_value, fill=theme.text)
         by = y + 14
-        # Track
-        draw.rectangle([x, by, x + bar_w, by + bar_h], outline=(200, 200, 200), width=1)
+        # Track - centered within GPU panel with equal margins
+        bar_x = ox + bar_margin  # Start at GPU panel origin + margin
+        draw.rectangle([bar_x, by, bar_x + bar_w, by + bar_h], outline=(200, 200, 200), width=1)
         if pct is not None:
             fill_w = int(bar_w * max(0.0, min(1.0, pct / 100.0)))
             if fill_w > 0:
-                draw.rectangle([x, by, x + fill_w, by + bar_h], fill=color)
-        y = by + bar_h + 16
+                draw.rectangle([bar_x, by, bar_x + fill_w, by + bar_h], fill=color)
+        y = by + bar_h + 24  # Increased from 16 to 24 for more vertical space
 
     # GPU %
     bar("GPU", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), theme.bar_usage)
@@ -524,10 +535,6 @@ def create_monitoring_overlay(
     gpu_info: Optional[Dict[str, object]],
     width: int = TARGET_W,
     height: int = TARGET_H,
-    plot_x: int = 30,
-    plot_y: int = 40,
-    plot_w: int = 250,
-    plot_h: int = 400,
 ) -> Image.Image:
     theme = THEMES[_current_theme_index]
     # Create fully transparent overlay - no background
@@ -536,15 +543,13 @@ def create_monitoring_overlay(
 
     # Title aligned with left edge of plot area, bold, with core count
     title = "Ultra 7 265K • 20 Cores"
-    draw.text((plot_x, 10), title, font=_load_font_mono(16, bold=True), fill=theme.text)
+    draw.text((PLOT_X, 10), title, font=_load_font_mono(18, bold=True), fill=theme.text)
 
     # Regions
     # CPU plot rectangle: configurable position and size
-    # plot_x, plot_y = bottom-left corner of plot area (30°C, 0% util)
-    # plot_w, plot_h = width and height of plot area
-    cpu_origin = (plot_x, plot_y)
-    cpu_plot_w = plot_w
-    cpu_plot_h = plot_h
+    cpu_origin = (PLOT_X, PLOT_Y)
+    cpu_plot_w = PLOT_W
+    cpu_plot_h = PLOT_H
     _draw_cpu_plot(draw, img, cpu_info, theme, origin=cpu_origin, size=(cpu_plot_w, cpu_plot_h), grid_alpha=120, axes_alpha=220)
 
     # GPU panel occupies right 1/3 full height
@@ -583,7 +588,7 @@ def _with_raw_stdin():
                 pass
 
 
-def main(*, preview: bool = False, refresh_rate: float = 15.0, plot_x: int = 30, plot_y: int = 40, plot_w: int = 250, plot_h: int = 400) -> None:
+def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
     global _current_theme_index
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     root = _get_project_root()
@@ -728,7 +733,7 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0, plot_x: int = 30,
             # Use cached background directly, no copy/conversion
             bg = get_processed_bg()
             if show_stats:
-                overlay = create_monitoring_overlay(cpu, gpu, TARGET_W, TARGET_H, plot_x, plot_y, plot_w, plot_h)
+                overlay = create_monitoring_overlay(cpu, gpu, TARGET_W, TARGET_H)
                 # Composite transparent overlay onto background
                 bg_rgba = bg.convert("RGBA")
                 bg_rgba.alpha_composite(overlay)
@@ -818,7 +823,7 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0, plot_x: int = 30,
                 # Compose
                 bg = get_processed_bg()
                 if show_stats:
-                    overlay = create_monitoring_overlay(cpu, gpu, TARGET_W, TARGET_H, plot_x, plot_y, plot_w, plot_h)
+                    overlay = create_monitoring_overlay(cpu, gpu, TARGET_W, TARGET_H)
                     bg_rgba = bg.convert("RGBA")
                     bg_rgba.alpha_composite(overlay)
                     frame_img = bg_rgba.convert("RGB")
