@@ -515,7 +515,7 @@ def _draw_cpu_plot(draw: ImageDraw.ImageDraw, img: Image.Image, cpu: Dict[str, o
     tb = draw.textbbox((0, 0), y_label, font=f_axis_bold)
     text_w = tb[2] - tb[0]
     text_h = tb[3] - tb[1]
-    margin = 6
+    margin = 6 # TODO FIXME seems to have no effect
     tx = ox - margin - text_w
     if tx < 0:
         tx = 0
@@ -552,8 +552,10 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
     img.alpha_composite(panel)
 
     f_title = _load_font_mono(20, bold=True)
-    f_label = _load_font_mono(16, bold=True)  
-    f_value = _load_font_mono(16)  
+    # Dimmers and value/unit font strategy (larger sizes)
+    f_label = _load_font_mono(18, bold=True)
+    f_value_num = _load_font_mono(18, bold=True)
+    f_value_unit = _load_font_mono(12, bold=False)
 
     bar_margin = 10  # Margin on both left and right sides for bars and title
     x = ox + bar_margin  # Use bar_margin for consistent positioning
@@ -573,46 +575,92 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
     draw.text((x, y), name, font=f_title, fill=theme.text)
     y += 50
 
-    def bar(label: str, value_str: str, pct: Optional[float], color: Tuple[int, int, int]):
+    def _interp_color(c: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
+        # Scale towards black by factor in [0,1]
+        f = max(0.0, min(1.0, factor))
+        return (int(c[0] * f), int(c[1] * f), int(c[2] * f))
+
+    def _draw_value_right_aligned(val: str, right_x: int, baseline_y: int) -> None:
+        # Split into numeric part and unit part (last space or last non-digit/decimal)
+        num = val
+        unit = ""
+        # Prefer split by last space
+        if " " in val:
+            parts = val.rsplit(" ", 1)
+            num, unit = parts[0], parts[1]
+        else:
+            # Handle cases like 75% or 65°C
+            if val and not val[-1].isdigit():
+                num, unit = val[:-1], val[-1]
+        # Measure
+        num_bbox = draw.textbbox((0, 0), num, font=f_value_num)
+        unit_bbox = draw.textbbox((0, 0), unit, font=f_value_unit) if unit else (0, 0, 0, 0)
+        num_w = num_bbox[2] - num_bbox[0]
+        num_h = num_bbox[3] - num_bbox[1]
+        unit_w = unit_bbox[2] - unit_bbox[0]
+        unit_h = unit_bbox[3] - unit_bbox[1]
+        # Right-align as a group, bottoms aligned
+        unit_x = right_x - unit_w
+        num_x = unit_x - (3 if unit else 0) - num_w
+        # Bottom alignment: place y such that bottoms coincide at baseline_y
+        num_y = baseline_y - num_h
+        unit_y = baseline_y - unit_h
+        # Draw
+        draw.text((num_x, num_y), num, font=f_value_num, fill=theme.text)
+        if unit:
+            draw.text((unit_x, unit_y), unit, font=f_value_unit, fill=theme.text)
+
+    def bar(label: str, value_str: str, pct: Optional[float], base_color: Tuple[int, int, int]):
         nonlocal y
         bar_w = w - (2 * bar_margin)  # Total width minus margins on both sides
         bar_h = 8
         # Label left-aligned to bar start, value right-aligned to bar end
         bar_x = ox + bar_margin  # Same as bar start position
         bar_end_x = bar_x + bar_w  # Bar end position
-        draw.text((bar_x, y - 4), label, font=f_label, fill=theme.text)
-        # Measure value text width using textbbox for compatibility
-        bbox = draw.textbbox((0, 0), value_str, font=f_value)
-        vw = bbox[2] - bbox[0]
-        draw.text((bar_end_x - vw, y - 4), value_str, font=f_value, fill=theme.text)
+        # Dim label using alpha on an overlay
+        label_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        ld = ImageDraw.Draw(label_layer)
+        ld.text((bar_x, y - 4), label, font=f_label, fill=(*theme.text, 140))
+        img.alpha_composite(label_layer)
+        # Right-aligned value with number larger than unit
+        _draw_value_right_aligned(value_str, bar_end_x, y + 10)
         by = y + 14
-        # Track - centered within GPU panel with equal margins
-        bar_x = ox + bar_margin  # Start at GPU panel origin + margin
-        draw.rectangle([bar_x, by, bar_x + bar_w, by + bar_h], outline=(200, 200, 200), width=1)
+        # Track - per-bar tinted empty track (no outline)
+        empty_col = _interp_color(base_color, 0.25)
+        draw.rectangle([bar_x, by, bar_x + bar_w, by + bar_h], fill=empty_col)
         if pct is not None:
-            fill_w = int(bar_w * max(0.0, min(1.0, pct / 100.0)))
+            # Eased fill intensity based on percentage
+            eased = max(0.0, min(1.0, pct / 100.0))
+            gamma = 2.2
+            intensity = pow(eased, 1.0 / gamma)
+            fill_w = int(bar_w * eased)
             if fill_w > 0:
-                draw.rectangle([bar_x, by, bar_x + fill_w, by + bar_h], fill=color)
+                fill_col = _interp_color(base_color, 0.4 + 0.6 * intensity)
+                draw.rectangle([bar_x, by, bar_x + fill_w, by + bar_h], fill=fill_col)
         y = by + bar_h + 24  # Increased from 16 to 24 for more vertical space
 
-    # GPU %
+    # GPU % (0-100)
     bar("Utilization", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), theme.bar_usage)
-    # Temp (scale 30-85°C to 0-100%)
+    # Temp (0-90°C cap for bar)
     temp = float(gpu.get("temperature", 0))
-    temp_pct = max(0, min(100, (temp - 30) / (85 - 30) * 100)) if temp > 0 else 0
+    temp_cap = 90.0
+    temp_pct = max(0.0, min(100.0, (temp / temp_cap) * 100.0))
     bar("Temp", f"{temp:.0f}°C", temp_pct, theme.bar_temp)
-    # VRAM
+    # VRAM (cap bar at 16GB)
     used_mib = float(gpu.get("memory_used", 0.0))
     tot_mib = float(gpu.get("memory_total", 0.0)) or 1.0
-    pct_mem = used_mib / tot_mib * 100.0
-    bar("VRAM", f"{used_mib/1024:.1f}/{tot_mib/1024:.0f} GB", pct_mem, theme.bar_vram)
-    # Power (scale 0-450W to 0-100%)
+    cap_mib = 16.0 * 1024.0
+    pct_mem = max(0.0, min(100.0, (used_mib / cap_mib) * 100.0))
+    bar("VRAM", f"{used_mib/1024:.1f}/{tot_mib/1024:.1f} GB", pct_mem, theme.bar_vram)
+    # Power (cap at 300W for bar)
     power = gpu.get("power_usage")
-    power_pct = max(0, min(100, (float(power) / 450 * 100))) if power is not None else 0
+    power_cap = 300.0
+    power_pct = max(0.0, min(100.0, (float(power) / power_cap * 100.0))) if power is not None else 0.0
     bar("Power", f"{power:.0f} W" if power is not None else "N/A", power_pct, theme.bar_power)
-    # Fan (scale 0-3000 RPM to 0-100%)
+    # Fan (cap at 1700 RPM for bar)
     fan = gpu.get("fan_speed")
-    fan_pct = max(0, min(100, (float(fan) / 3000 * 100))) if fan is not None else 0
+    fan_cap = 1700.0
+    fan_pct = max(0.0, min(100.0, (float(fan) / fan_cap * 100.0))) if fan is not None else 0.0
     bar("Fan", f"{fan:.0f} RPM" if fan is not None else "N/A", fan_pct, theme.bar_fan)
 
 
