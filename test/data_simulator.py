@@ -4,12 +4,17 @@ Data Simulator for Thermalright System Monitor
 
 Simulates CPU and GPU data for testing the monitoring system.
 Provides various test scenarios including corner cases, edge cases, and realistic data patterns.
+
+Usage:
+    python data_simulator.py                    # Default: push to device screen
+    python data_simulator.py --preview          # Show preview window instead
 """
 
 import sys
 import os
 import time
 import math
+import argparse
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -168,9 +173,10 @@ def get_drifting_gpu_info():
     """Get GPU info that drifts over time - called each frame"""
     return get_mocked_gpu_info("drifting")
 
-def run_monitor_with_mocked_data(test_type="corners"):
+def run_monitor_with_mocked_data(test_type="corners", preview=False):
     """Run the actual monitoring system with mocked CPU and GPU data."""
-    print(f"Running thermalright_system_monitor.py with mocked {test_type} data...")
+    mode_str = "preview window" if preview else "device screen"
+    print(f"Running thermalright_system_monitor.py with mocked {test_type} data ({mode_str})...")
     print("Press Ctrl+C to stop")
     
     # Choose the appropriate mock functions based on test type
@@ -204,7 +210,7 @@ def run_monitor_with_mocked_data(test_type="corners"):
         
         # Run the actual main function with mocked data
         try:
-            main(preview=True)  # Use preview mode so it shows on screen
+            main(preview=preview)  # Use preview or device mode based on argument
         except KeyboardInterrupt:
             print("\nStopped by user")
 
@@ -268,7 +274,7 @@ def get_mocked_gpu_info(test_type="corners"):
             'power_usage': 320
         }
 
-def test_data_simulation():
+def test_data_simulation(preview=False):
     """Test the data simulation with various scenarios."""
     print("Choose test type:")
     print("1. Four corners test (0%, 100% utilization at 30°C, 105°C)")
@@ -279,15 +285,38 @@ def test_data_simulation():
     choice = input("Enter choice (1/2/3/4): ").strip()
     
     if choice == "1":
-        run_monitor_with_mocked_data("corners")
+        run_monitor_with_mocked_data("corners", preview)
     elif choice == "2":
-        run_monitor_with_mocked_data("edges")
+        run_monitor_with_mocked_data("edges", preview)
     elif choice == "3":
-        run_monitor_with_mocked_data("realistic")
+        run_monitor_with_mocked_data("realistic", preview)
     elif choice == "4":
-        run_monitor_with_mocked_data("drifting")
+        run_monitor_with_mocked_data("drifting", preview)
     else:
         print("Invalid choice. Please run the script again and choose 1, 2, 3, or 4.")
 
 if __name__ == "__main__":
-    test_data_simulation()
+    parser = argparse.ArgumentParser(description="Data Simulator for Thermalright System Monitor")
+    parser.add_argument("--preview", action="store_true",
+                       help="Show preview window instead of pushing to device screen")
+
+    # Scenario flags (mutually exclusive). Default: --drifting
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--corners", action="store_true", help="Four corners scenario")
+    group.add_argument("--edges", action="store_true", help="Edges scenario")
+    group.add_argument("--realistic", action="store_true", help="Realistic scenario")
+    group.add_argument("--drifting", action="store_true", help="Drifting scenario (default)")
+
+    args = parser.parse_args()
+
+    scenario = "drifting"
+    if args.corners:
+        scenario = "corners"
+    elif args.edges:
+        scenario = "edges"
+    elif args.realistic:
+        scenario = "realistic"
+    elif args.drifting:
+        scenario = "drifting"
+
+    run_monitor_with_mocked_data(scenario, args.preview)
