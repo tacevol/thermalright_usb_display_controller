@@ -551,16 +551,19 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
     pd.rectangle([ox, oy, ox + w, oy + h], fill=(0, 0, 0, int(255 * panel_gray_opacity)))
     img.alpha_composite(panel)
 
-    f_title = _load_font_mono(20, bold=True)
-    # Dimmers and value/unit font strategy (larger sizes)
-    f_label = _load_font_mono(18, bold=True)
-    f_value_num = _load_font_mono(18, bold=True)
-    f_value_unit = _load_font_mono(12, bold=False)
+    # Apple-style typography hierarchy
+    f_title = _load_font_mono(22, bold=True)  # Larger, bolder title
+    f_label = _load_font_mono(18, bold=True)  # Medium weight for labels (semibold feel)
+    f_value_num = _load_font_mono(24, bold=True)  # Largest, boldest for values
+    f_value_unit = _load_font_mono(16, bold=False)  # Smaller, regular for units
 
-    bar_margin = 10  # Margin on both left and right sides for bars and title
-    x = ox + bar_margin  # Use bar_margin for consistent positioning
+    # Spacing tuned to fit 5 bars within 480px height
+    golden_ratio = 1.618
+    base_unit = 8  # Base spacing unit
+    bar_margin = int(base_unit * golden_ratio)  # ~13px margins
+    x = ox + bar_margin
     
-    y = oy +  120 # Vertical shift of GPU panel
+    y = oy + 120  # Title baseline area
 
     if not gpu.get("available"):
         draw.text((x, y), "GPU not available", font=f_label, fill=theme.text)
@@ -573,14 +576,29 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
         if name.startswith(prefix):
             name = name[len(prefix):]
     draw.text((x, y), name, font=f_title, fill=theme.text)
-    y += 50
+    y += 50  # Title-to-bars spacing
 
     def _interp_color(c: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
-        # Scale towards black by factor in [0,1]
+        # Enhanced color interpolation with smoother curves
         f = max(0.0, min(1.0, factor))
-        return (int(c[0] * f), int(c[1] * f), int(c[2] * f))
+        # Use ease-out curve for more natural color transitions
+        eased = 1.0 - pow(1.0 - f, 3.0)
+        return (int(c[0] * eased), int(c[1] * eased), int(c[2] * eased))
+    
+    def _create_gradient_fill(start_col: Tuple[int, int, int], end_col: Tuple[int, int, int], width: int, height: int) -> Image.Image:
+        """Create a smooth gradient fill for bars"""
+        gradient = Image.new("RGB", (width, height))
+        for x in range(width):
+            ratio = x / max(1, width - 1)
+            # Smooth interpolation
+            r = int(start_col[0] * (1 - ratio) + end_col[0] * ratio)
+            g = int(start_col[1] * (1 - ratio) + end_col[1] * ratio)
+            b = int(start_col[2] * (1 - ratio) + end_col[2] * ratio)
+            for y in range(height):
+                gradient.putpixel((x, y), (r, g, b))
+        return gradient
 
-    def _draw_value_right_aligned(val: str, right_x: int, baseline_y: int) -> None:
+    def _draw_value_right_aligned(val: str, right_x: int, baseline_y: int, color: Tuple[int, int, int]) -> None:
         # Split into numeric part and unit part (last space or last non-digit/decimal)
         num = val
         unit = ""
@@ -605,10 +623,10 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
         # Bottom alignment: place y such that bottoms coincide at baseline_y
         num_y = baseline_y - num_h
         unit_y = baseline_y - unit_h
-        # Draw
-        draw.text((num_x, num_y), num, font=f_value_num, fill=theme.text)
+        # Draw with bar color
+        draw.text((num_x, num_y), num, font=f_value_num, fill=color)
         if unit:
-            draw.text((unit_x, unit_y), unit, font=f_value_unit, fill=theme.text)
+            draw.text((unit_x, unit_y), unit, font=f_value_unit, fill=color)
 
     def bar(label: str, value_str: str, pct: Optional[float], base_color: Tuple[int, int, int]):
         nonlocal y
@@ -617,17 +635,29 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
         # Label left-aligned to bar start, value right-aligned to bar end
         bar_x = ox + bar_margin  # Same as bar start position
         bar_end_x = bar_x + bar_w  # Bar end position
-        # Dim label using alpha on an overlay
+        # Label using bar color with transparency
         label_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
         ld = ImageDraw.Draw(label_layer)
-        ld.text((bar_x, y - 4), label, font=f_label, fill=(*theme.text, 140))
+        ld.text((bar_x, y - 4), label, font=f_label, fill=(*base_color, 140))
         img.alpha_composite(label_layer)
         # Right-aligned value with number larger than unit
-        _draw_value_right_aligned(value_str, bar_end_x, y + 10)
+        _draw_value_right_aligned(value_str, bar_end_x, y + 8, base_color) #TODO FIXME bar value baseline y was +10
         by = y + 14
-        # Track - per-bar tinted empty track (no outline)
-        empty_col = _interp_color(base_color, 0.25)
-        draw.rectangle([bar_x, by, bar_x + bar_w, by + bar_h], fill=empty_col)
+        # Track - per-bar tinted empty track with rounded corners and subtle shadow
+        empty_col = _interp_color(base_color, 0.15)
+        radius = 2  # Slightly less rounded
+        
+        # Subtle shadow effect (very light for low resolution)
+        shadow_offset = 1
+        shadow_col = (0, 0, 0, 30)  # Very subtle black shadow
+        shadow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(shadow_layer)
+        sd.rounded_rectangle([bar_x + shadow_offset, by + shadow_offset, bar_x + bar_w + shadow_offset, by + bar_h + shadow_offset], 
+                           radius=radius, fill=shadow_col)
+        img.alpha_composite(shadow_layer)
+        
+        # Draw rounded rectangle for empty track
+        draw.rounded_rectangle([bar_x, by, bar_x + bar_w, by + bar_h], radius=radius, fill=empty_col)
         if pct is not None:
             # Eased fill intensity based on percentage
             eased = max(0.0, min(1.0, pct / 100.0))
@@ -635,33 +665,53 @@ def _draw_gpu_panel(draw: ImageDraw.ImageDraw, img: Image.Image, gpu: Dict[str, 
             intensity = pow(eased, 1.0 / gamma)
             fill_w = int(bar_w * eased)
             if fill_w > 0:
-                fill_col = _interp_color(base_color, 0.4 + 0.6 * intensity)
-                draw.rectangle([bar_x, by, bar_x + fill_w, by + bar_h], fill=fill_col)
-        y = by + bar_h + 24  # Increased from 16 to 24 for more vertical space
+                # Create gradient from darker to lighter
+                start_col = _interp_color(base_color, 0.3 + 0.3 * intensity)
+                end_col = _interp_color(base_color, 0.6 + 0.4 * intensity)
+                
+                # Create gradient fill
+                gradient = _create_gradient_fill(start_col, end_col, fill_w, bar_h)
+                
+                # Apply gradient to the fill area
+                if fill_w >= radius * 2:
+                    # Create a mask for rounded rectangle
+                    mask = Image.new("L", (fill_w, bar_h), 0)
+                    mask_draw = ImageDraw.Draw(mask)
+                    mask_draw.rounded_rectangle([0, 0, fill_w, bar_h], radius=radius, fill=255)
+                    
+                    # Apply gradient with mask
+                    gradient.putalpha(mask)
+                    img.paste(gradient, (bar_x, by), gradient)
+                else:
+                    # For very small fills, use regular rectangle
+                    img.paste(gradient, (bar_x, by))
+        y = by + bar_h + 40  # Spacing between bars
 
-    # GPU % (0-100)
-    bar("Utilization", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), theme.bar_usage)
-    # Temp (0-90°C cap for bar)
+    # Apple-style sophisticated color palette (no icons for max compatibility)
+    # Usage - now purple
+    bar("Usage", f"{gpu.get('usage_percent', 0):.0f}%", float(gpu.get("usage_percent", 0.0)), (175, 82, 222))
+    # Temp - sophisticated orange with better contrast
     temp = float(gpu.get("temperature", 0))
+    temp_min = 45.0
     temp_cap = 90.0
-    temp_pct = max(0.0, min(100.0, (temp / temp_cap) * 100.0))
-    bar("Temp", f"{temp:.0f}°C", temp_pct, theme.bar_temp)
-    # VRAM (cap bar at 16GB)
+    temp_pct = max(0.0, min(100.0, ((temp - temp_min) / (temp_cap - temp_min)) * 100.0))
+    bar("Temp", f"{temp:.0f}°C", temp_pct, (255, 149, 0))  # Apple orange
+    # VRAM - refined green
     used_mib = float(gpu.get("memory_used", 0.0))
     tot_mib = float(gpu.get("memory_total", 0.0)) or 1.0
     cap_mib = 16.0 * 1024.0
     pct_mem = max(0.0, min(100.0, (used_mib / cap_mib) * 100.0))
-    bar("VRAM", f"{used_mib/1024:.1f}/{tot_mib/1024:.1f} GB", pct_mem, theme.bar_vram)
-    # Power (cap at 300W for bar)
+    bar("VRAM", f"{used_mib/1024:.1f} GB", pct_mem, (52, 199, 89))  # Apple green
+    # Power - sophisticated yellow/amber
     power = gpu.get("power_usage")
     power_cap = 300.0
     power_pct = max(0.0, min(100.0, (float(power) / power_cap * 100.0))) if power is not None else 0.0
-    bar("Power", f"{power:.0f} W" if power is not None else "N/A", power_pct, theme.bar_power)
-    # Fan (cap at 1700 RPM for bar)
+    bar("Power", f"{power:.0f} W" if power is not None else "N/A", power_pct, (255, 204, 0))  # Apple yellow
+    # Fan - now cyan/teal
     fan = gpu.get("fan_speed")
     fan_cap = 1700.0
     fan_pct = max(0.0, min(100.0, (float(fan) / fan_cap * 100.0))) if fan is not None else 0.0
-    bar("Fan", f"{fan:.0f} RPM" if fan is not None else "N/A", fan_pct, theme.bar_fan)
+    bar("Fan", f"{fan:.0f} RPM" if fan is not None else "N/A", fan_pct, (52, 199, 235))  # Apple blue
 
 
 def create_monitoring_overlay(
@@ -675,9 +725,9 @@ def create_monitoring_overlay(
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Title aligned with left edge of plot area, bold, with core count
+    # Title aligned with left edge of plot area, enhanced typography
     title = "Ultra 7 265K • 20 Cores"
-    draw.text((PLOT_X, 10), title, font=_load_font_mono(18, bold=True), fill=theme.text)
+    draw.text((PLOT_X, 10), title, font=_load_font_mono(20, bold=True), fill=theme.text)
 
     # Regions
     # CPU plot rectangle: configurable position and size
@@ -753,7 +803,7 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
     # EMA smoothing state for CPU - moderate smoothing for balanced drifting
     prev_per_core: List[float] = []
     prev_temps: List[float] = []
-    alpha = 0.05  # Gentle smoothing (10% new, 90% previous) - less jittery
+    alpha = 0.04  # lower = smoother
 
     period = 1.0 / max(1e-6, refresh_rate)
     logging.info("Monitor started (preview=%s, target_fps=%.1f)", preview, refresh_rate)
@@ -875,11 +925,10 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
 
             cpu = get_cpu_info(0.0)  # No sampling delay for better FPS
             gpu = get_gpu_info()
-            # Moderate smoothing for balanced drifting
+            # EMA smoothing
             cur_pc = list(cpu.get("per_core", []))
             cur_t = list(cpu.get("temps", []))
             
-            # Initialize arrays if needed
             if len(prev_per_core) < len(cur_pc):
                 prev_per_core.extend([cur_pc[len(prev_per_core)]] * (len(cur_pc) - len(prev_per_core)))
             if len(prev_temps) < len(cur_t):
@@ -969,11 +1018,10 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
                 # Data
                 cpu = get_cpu_info(0.0)  # No sampling delay for better FPS
                 gpu = get_gpu_info()
-                # Moderate smoothing for balanced drifting
+                # EMA smoothing
                 cur_pc = list(cpu.get("per_core", []))
                 cur_t = list(cpu.get("temps", []))
                 
-                # Initialize arrays if needed
                 if len(prev_per_core) < len(cur_pc):
                     prev_per_core.extend([cur_pc[len(prev_per_core)]] * (len(cur_pc) - len(prev_per_core)))
                 if len(prev_temps) < len(cur_t):
@@ -1004,7 +1052,7 @@ def main(*, preview: bool = False, refresh_rate: float = 15.0) -> None:
                 # Send to device
                 if not preview and device and endpoint:
                     try:
-                        payload = _create_device_payload(frame_img, header, tail, quality=80)
+                        payload = _create_device_payload(frame_img, header, tail, quality=100)
                         _send_payload(endpoint, payload)
                     except Exception as e:
                         logging.error("Failed to send to device: %s", e)
