@@ -66,6 +66,7 @@ pillow.libs/
 # USB capture files - security sensitive
 assets/data/*.pcap
 assets/data/*.bin
+assets/images/TRCC_screenshots/
 
 # Reference files
 thermalright_system_monitor_BTOP_style.py
@@ -73,3 +74,6 @@ thermalright_system_monitor_BTOP_style.py
 # Personal startup files (keep local, don't push to GitHub)
 start_monitor.sh
 thermalright-monitor.desktop
+
+# Personal background image files
+assets/images/moose*.png
